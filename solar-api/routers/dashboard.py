@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from influx import query
-from config import settings
+from config import settings, solar_bill_savings
 from datetime import datetime, date, timedelta, timezone
 from typing import Optional
 import httpx
@@ -137,12 +137,21 @@ from(bucket: "{BUCKET}")
     }
     health_score = _compute_health(live)
 
+    # DHBVN slab-rate savings (assumes a 300 kWh/month household consumption baseline)
+    # The effective savings per kWh is higher than flat rate because solar offsets expensive slabs first
+    assumed_monthly_consumption = 300.0
+    bill_data = solar_bill_savings(energy_month, assumed_monthly_consumption)
+
     return {
         "power_now_w": power,
         "capacity_pct": capacity_pct,
         "energy_today_kwh": energy_today,
         "savings_today_inr": savings_today,
         "savings_month_inr": round(energy_month * TARIFF, 1),
+        "savings_month_slab_inr": bill_data["savings_inr"],
+        "bill_without_solar_inr": bill_data["bill_without_solar_inr"],
+        "bill_with_solar_inr": bill_data["bill_with_solar_inr"],
+        "effective_tariff_inr_per_kwh": bill_data["effective_rate_inr_per_kwh"],
         "savings_total_inr": total_savings,
         "co2_today_kg": co2_today,
         "co2_total_kg": round(total_energy * CO2_KG_PER_KWH, 1),

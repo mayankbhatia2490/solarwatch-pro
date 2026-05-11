@@ -2,7 +2,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import dashboard, electrical, notifications, grid, thermal, anomalies, maintenance, performance, weather, reports, settings as settings_router
+from routers import dashboard, electrical, notifications, grid, thermal, anomalies, maintenance, performance, weather, reports, settings as settings_router, forecast, cleaning
 import monitor
 
 @asynccontextmanager
@@ -39,6 +39,8 @@ app.include_router(maintenance.router)
 app.include_router(performance.router)
 app.include_router(weather.router)
 app.include_router(reports.router)
+app.include_router(forecast.router)
+app.include_router(cleaning.router)
 
 @app.get("/health")
 async def health():

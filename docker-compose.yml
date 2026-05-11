@@ -60,6 +60,8 @@ services:
       - EMAIL_FROM=${EMAIL_FROM}
       - EMAIL_TO=${EMAIL_TO}
       - INSTALLED_CAPACITY_W=${INSTALLED_CAPACITY_W}
+      - ELECTRICITY_TARIFF_INR=${ELECTRICITY_TARIFF_INR:-6.5}
+      - SITE_ID=${SITE_ID:-default}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
     depends_on:
       - influxdb

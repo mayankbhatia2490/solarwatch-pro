@@ -19,12 +19,32 @@ def get_performance_data() -> Dict[str, Any]:
     now = datetime.now(timezone.utc)
     install_date = datetime(2025, 4, 17, tzinfo=timezone.utc)
 
-    days_old = (now - install_date).days
+    days_old  = (now - install_date).days
     years_old = days_old / 365.25
 
     # Standard Tier-1 panel degradation: 2% year 1, then 0.55%/year (per IEC 61215)
     expected_deg = 2.0 + max(0, (years_old - 1) * 0.55) if years_old > 0 else 0
-    actual_deg = max(0, expected_deg * 0.85)  # slightly better than expected
+
+    # Actual degradation: compare first-month avg PR to current 30-day avg PR
+    # This is a real measurement — not a formula ratio
+    first_month_end = (install_date + timedelta(days=45)).date().isoformat()
+    first_month_start = install_date.date().isoformat()
+    flux_first = f'''
+from(bucket: "{BUCKET}")
+  |> range(start: {first_month_start}T00:00:00Z, stop: {first_month_end}T23:59:59Z)
+  |> filter(fn: (r) => r["_field"] == "power_now_w" or r["_field"] == "expected_power_w")
+  |> filter(fn: (r) => r["_value"] > 50)
+  |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+'''
+    first_recs = query(flux_first)
+    first_ratios = []
+    for r in first_recs:
+        actual   = r.values.get("power_now_w") or 0
+        expected = r.values.get("expected_power_w") or 0
+        if expected > 200:
+            first_ratios.append(min(actual / expected, 1.05))
+    baseline_pr = (sum(first_ratios) / len(first_ratios) * 100) if len(first_ratios) >= 20 else None
 
     months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
               "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -127,6 +147,12 @@ from(bucket: "{BUCKET}")
     # Hard cap at 100% (physical limit)
     performance_ratio = min(performance_ratio, 100.0)
 
+    # Actual degradation: difference between baseline PR and current PR (real measurement)
+    if baseline_pr is not None and baseline_pr > 0:
+        actual_deg = round(max(0, baseline_pr - performance_ratio), 2)
+    else:
+        actual_deg = None  # Not enough data yet (system too new)
+
 
     # Best days (max daily production)
     flux_best = f'''
@@ -159,7 +185,8 @@ from(bucket: "{BUCKET}")
             "system_age_days": days_old,
             "system_age_years": round(years_old, 1),
             "expected_degradation_pct": round(expected_deg, 2),
-            "actual_degradation_pct": round(actual_deg, 2),
+            "actual_degradation_pct": actual_deg,
+            "baseline_pr": round(baseline_pr, 1) if baseline_pr else None,
             "performance_ratio": performance_ratio,
             "total_energy_kwh": round(total_energy_kwh, 1),
             "yoy_data": yoy_data,
