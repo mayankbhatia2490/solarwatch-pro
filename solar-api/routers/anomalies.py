@@ -99,7 +99,7 @@ from(bucket: "{BUCKET}")
                         f"This is a grid-side issue — your inverter may trip to protect itself."
                     ),
                     "impact_inr": 0,
-                    "action": "Monitor. If persistent, contact your electricity distributor (DHBVN)."
+                    "action": "Monitor. If persistent, contact your electricity distributor (UHBVN)."
                 })
                 _id += 1
 

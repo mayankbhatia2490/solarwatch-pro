@@ -28,21 +28,23 @@ class Settings(BaseSettings):
 settings = Settings()
 
 
-# ── DHBVN Haryana domestic tariff slabs (FY 2024-25) ─────────────────────────
-# Source: HERC tariff order. Fixed charges excluded (same with/without solar).
-# Slabs: 0-100 units @2.50, 101-300 @5.25, 301-500 @6.50, >500 @7.10 per kWh
-DHBVN_SLABS = [
-    (100,  2.50),   # first 100 units
-    (200,  5.25),   # next 200 units (101-300)
-    (200,  6.50),   # next 200 units (301-500)
-    (None, 7.10),   # above 500 units
+# ── UHBVN (Uttar Haryana Bijli Vitran Nigam) domestic tariff slabs ────────────
+# Applicable to: Karnal, Panipat, Ambala, Yamuna Nagar, Kurukshetra, Sonipat etc.
+# Source: HERC tariff order FY 2024-25. Fixed/demand charges excluded
+# (those are the same with or without solar — only energy units change).
+# Verify latest rates at: https://www.uhbvn.org.in/tariff
+UHBVN_SLABS = [
+    (100,  2.50),   # 0–100 units  @ ₹2.50/kWh
+    (200,  5.25),   # 101–300 units @ ₹5.25/kWh
+    (200,  6.50),   # 301–500 units @ ₹6.50/kWh
+    (None, 7.00),   # >500 units    @ ₹7.00/kWh
 ]
 
-def calculate_dhbvn_bill(units_kwh: float) -> float:
-    """Return the electricity bill in INR for given kWh consumed under DHBVN domestic slabs."""
+def calculate_uhbvn_bill(units_kwh: float) -> float:
+    """Return electricity bill in INR for given kWh under UHBVN domestic slab rates."""
     bill = 0.0
     remaining = units_kwh
-    for slab_size, rate in DHBVN_SLABS:
+    for slab_size, rate in UHBVN_SLABS:
         if remaining <= 0:
             break
         if slab_size is None:
@@ -56,22 +58,23 @@ def calculate_dhbvn_bill(units_kwh: float) -> float:
 
 def solar_bill_savings(monthly_kwh_generated: float, monthly_kwh_consumed: float) -> dict:
     """
-    Calculate real rupee savings using DHBVN slab rates.
+    Calculate real rupee savings using UHBVN slab rates.
     Solar generation offsets the most expensive slabs first (highest-tariff units).
     Returns bill_without_solar, bill_with_solar, savings, effective_rate.
     """
-    bill_without = calculate_dhbvn_bill(monthly_kwh_consumed)
+    bill_without = calculate_uhbvn_bill(monthly_kwh_consumed)
     net_consumption = max(0, monthly_kwh_consumed - monthly_kwh_generated)
-    bill_with = calculate_dhbvn_bill(net_consumption)
+    bill_with = calculate_uhbvn_bill(net_consumption)
     savings = round(bill_without - bill_with, 2)
     effective_rate = round(savings / monthly_kwh_generated, 2) if monthly_kwh_generated > 0 else 0
     return {
-        "bill_without_solar_inr": bill_without,
-        "bill_with_solar_inr":    bill_with,
-        "savings_inr":            savings,
+        "bill_without_solar_inr":     bill_without,
+        "bill_with_solar_inr":        bill_with,
+        "savings_inr":                savings,
         "effective_rate_inr_per_kwh": effective_rate,
-        "monthly_kwh_generated":  round(monthly_kwh_generated, 1),
-        "monthly_kwh_consumed":   round(monthly_kwh_consumed, 1),
+        "monthly_kwh_generated":      round(monthly_kwh_generated, 1),
+        "monthly_kwh_consumed":       round(monthly_kwh_consumed, 1),
+        "distributor":                "UHBVN",
     }
 
 

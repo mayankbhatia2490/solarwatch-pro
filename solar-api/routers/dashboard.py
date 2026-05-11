@@ -137,7 +137,7 @@ from(bucket: "{BUCKET}")
     }
     health_score = _compute_health(live)
 
-    # DHBVN slab-rate savings (assumes a 300 kWh/month household consumption baseline)
+    # UHBVN slab-rate savings (assumes a 300 kWh/month household consumption baseline)
     # The effective savings per kWh is higher than flat rate because solar offsets expensive slabs first
     assumed_monthly_consumption = 300.0
     bill_data = solar_bill_savings(energy_month, assumed_monthly_consumption)

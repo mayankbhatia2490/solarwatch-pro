@@ -47,7 +47,7 @@ THRESHOLDS = {
 KSY_FAULT_CODES: dict[str, dict] = {
     "F1":  {"title": "Grid Over-Voltage",     "severity": "warning",
             "detail": "AC grid voltage too high. Inverter disconnected to protect itself. Usually resolves automatically.",
-            "action": "Monitor grid voltage. If recurring, contact DHBVN."},
+            "action": "Monitor grid voltage. If recurring, contact UHBVN."},
     "F2":  {"title": "Grid Under-Voltage",    "severity": "warning",
             "detail": "AC grid voltage too low. Inverter disconnected for protection.",
             "action": "Monitor grid voltage. If power supply is irregular, contact your electricity provider."},
@@ -59,7 +59,7 @@ KSY_FAULT_CODES: dict[str, dict] = {
             "action": "No action needed — inverter reconnects automatically when frequency normalises."},
     "F5":  {"title": "Grid No-Voltage",       "severity": "critical",
             "detail": "No AC grid voltage detected. Grid power cut or main breaker tripped.",
-            "action": "Check your main circuit breaker and grid supply. Contact DHBVN if power is out."},
+            "action": "Check your main circuit breaker and grid supply. Contact UHBVN if power is out."},
     "F6":  {"title": "DC Input Over-Voltage", "severity": "critical",
             "detail": "PV string voltage too high. Can damage inverter MOSFET circuits.",
             "action": "Stop system immediately. Check PV string wiring. Do not restart until inspected by an engineer."},

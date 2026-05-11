@@ -154,7 +154,7 @@ async def check_grid_voltage():
             f"Grid Voltage {direction.title()} — {v:.1f}V",
             f"Grid R-phase: <b>{v:.1f}V</b> (safe range: {GRID_V_LOW}–{GRID_V_HIGH}V).\n"
             f"Your inverter handles this automatically. "
-            f"If persistent, contact DHBVN.",
+            f"If persistent, contact UHBVN.",
             severity="warning"
         ))
 
