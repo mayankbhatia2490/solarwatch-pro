@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html class="fixed">
+<script type="text/javascript">
+	function GetRequest() {
+		var url = location.search; //è·åurlä¸­"?"ç¬¦åçå­ä¸²   
+		var theRequest = new Object();
+		if (url.indexOf("?") != -1) {
+			var str = url.substr(1);
+			var strs = str.split("&");
+			for (var i = 0; i < strs.length; i++) {
+				theRequest[strs[i].split("=")[0]] = unescape(strs[i].split("=")[1]);
+			}
+		}
+		return theRequest;
+	}
+	// var globalStorage = JSON.parse(window.localStorage.getItem("globalStorage"));
+	// //çæµæ¯å¦ç»éäº,æå-çæé¡¶é¨ä¸æåè¡¨,å¤±è´¥-æç¤ºéæ°ç»é  æªç»å½å¼ºè¡è·¯å¾è·³è½¬é¡µé¢æ¥éï¼ä¸é¢çcheckLoginç±äºé¡µé¢éè¯¯è¢«é»å¡äº
+	var globalStorage = window.localStorage.getItem("globalStorage");
+	if (globalStorage === undefined || globalStorage === null)
+		window.location.href = "/errorNoLogin.html";
+	globalStorage = JSON.parse(globalStorage);
+	if (globalStorage.accounts === undefined || globalStorage.accounts === null)
+		window.location.href = "/errorNoLogin.html";
+	var userInfo = globalStorage.accounts[globalStorage.accounts.length - 1].dat
+
+	if (userInfo.role == 1 || userInfo.role == 2)
+		window.location.href = "/managesystemnew/index.html?" + (new Date().getTime());
+	else if (userInfo.role == 15) {
+		//				alert("userInfo")
+		window.location.href = "/admin/main.html?" + (new Date().getTime());
+	}
+
+	MAPID = "zh-CN";
+	VERSION = "V1.63.0.1"; //çæ¬æ§å¶
+
+	// googleå°å¾å·²ç»ä¿®æ¹ä¸ºmaptalkså°å¾æ éå è½½ä»¥ä¸åå®¹ï¼ææ¶éè
+	// var id = globalStorage.accounts[((GetRequest().index == undefined || GetRequest().index == "undefined") ? 0 : GetRequest().index)].lang;
+	// if(id == 0) {
+	// 	//
+	// 	//			MAPID = "zh-CN";
+	// 	//			document.write("<script type='text/javascript' src='http://maps.google.cn/maps/api/js?&language="+MAPID+"&sensor=true&key=AIzaSyDRbbVGCfXIkdZV0kl0iQoxOicsacoj1sw'><\/script>")
+	// } else if(id == 1) {
+	// 	MAPID = "en-US";
+	// 	document.write("<script type='text/javascript' src='" + document.location.protocol + "//maps.googleapis.com/maps/api/js?&language=" + MAPID + "&sensor=true&key=AIzaSyDRbbVGCfXIkdZV0kl0iQoxOicsacoj1sw'><\/script><script type='text/javascript' src='js/markerwithlabel.js'><\/script>");
+	// 	// document.write("<script type='text/javascript' src='" + document.location.protocol + "//maps.google.cn/maps/api/js?&language=" + MAPID + "&sensor=true&key=AIzaSyDRbbVGCfXIkdZV0kl0iQoxOicsacoj1sw'><\/script><script type='text/javascript' src='js/markerwithlabel.js'><\/script>");
+
+	// } else if(id == 2) {
+	// 	MAPID = "en-US";
+	// 	document.write("<script type='text/javascript' src='" + document.location.protocol + "//maps.googleapis.com/maps/api/js?&language=" + MAPID + "&sensor=true&key=AIzaSyDRbbVGCfXIkdZV0kl0iQoxOicsacoj1sw'><\/script><script type='text/javascript' src='js/markerwithlabel.js'><\/script>");
+
+	// } else if(id == 3) {
+
+	// 	MAPID = "pt-BR";
+	// 	document.write("<script type='text/javascript' src='" + document.location.protocol + "//maps.googleapis.com/maps/api/js?&language=" + MAPID + "&sensor=true&key=AIzaSyDRbbVGCfXIkdZV0kl0iQoxOicsacoj1sw'><\/script><script type='text/javascript' src='js/markerwithlabel.js'><\/script>");
+	// }
+	// else if(id == 4) {
+
+	// 	MAPID = "es-ES";
+	// 	document.write("<script type='text/javascript' src='" + document.location.protocol + "//maps.googleapis.com/maps/api/js?&language=" + MAPID + "&sensor=true&key=AIzaSyDRbbVGCfXIkdZV0kl0iQoxOicsacoj1sw'><\/script><script type='text/javascript' src='js/markerwithlabel.js'><\/script>");
+	// }
+	// else if(id == 5) {
+	// 	MAPID = "pl-PL";
+	// 	document.write("<script type='text/javascript' src='" + document.location.protocol + "//maps.googleapis.com/maps/api/js?&language=" + MAPID + "&sensor=true&key=AIzaSyDRbbVGCfXIkdZV0kl0iQoxOicsacoj1sw'><\/script><script type='text/javascript' src='js/markerwithlabel.js'><\/script>");
+	// }
+	// else if(id == 6) {
+	// 	MAPID = "zh-HK";
+	// 	document.write("<script type='text/javascript' src='" + document.location.protocol + "//maps.googleapis.com/maps/api/js?&language=" + MAPID + "&sensor=true&key=AIzaSyDRbbVGCfXIkdZV0kl0iQoxOicsacoj1sw'><\/script><script type='text/javascript' src='js/markerwithlabel.js'><\/script>");
+	// }
+	// else if(id == 7) {
+	// 	MAPID = "in_IN";
+	// 	document.write("<script type='text/javascript' src='" + document.location.protocol + "//maps.googleapis.com/maps/api/js?&language=" + MAPID + "&sensor=true&key=AIzaSyDRbbVGCfXIkdZV0kl0iQoxOicsacoj1sw'><\/script><script type='text/javascript' src='js/markerwithlabel.js'><\/script>");
+	// }
+	// else if(id == 8) {
+	// 	MAPID = "vi_VN";
+	// 	document.write("<script type='text/javascript' src='" + document.location.protocol + "//maps.googleapis.com/maps/api/js?&language=" + MAPID + "&sensor=true&key=AIzaSyDRbbVGCfXIkdZV0kl0iQoxOicsacoj1sw'><\/script><script type='text/javascript' src='js/markerwithlabel.js'><\/script>");
+	// }
+	// else if(id == 9) {
+	// 	MAPID = "in_ID";
+	// 	document.write("<script type='text/javascript' src='" + document.location.protocol + "//maps.googleapis.com/maps/api/js?&language=" + MAPID + "&sensor=true&key=AIzaSyDRbbVGCfXIkdZV0kl0iQoxOicsacoj1sw'><\/script><script type='text/javascript' src='js/markerwithlabel.js'><\/script>");
+	// }
+</script>
+
+<head>
+	<title></title>
+	<meta charset="UTF-8">
+	<meta http-equiv="pragma" content="no-cache">
+	<!-- 	boostrapå¼å®¹IE9 -->
+	<meta http-equiv="X-UA-Compatible" content="ie=edge;chrome=1" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+	<link href="" rel="shortcut icon" class="cusIcoFirst">
+	<link rel="stylesheet" href="/assets/vendor/bootstrap/css/bootstrap.css" />
+	<link rel="stylesheet" href="/assets/vendor/font-awesome/css/font-awesome.css" />
+	<link rel="stylesheet" href="/assets/vendor/bootstrap-datepicker/css/bootstrap-datepicker3.css" />
+	<link rel="stylesheet" href="/assets/vendor/jquery-ui/jquery-ui.css" />
+	<link rel="stylesheet" href="/assets/vendor/jquery-ui/jquery-ui.theme.css" />
+	<link rel="stylesheet" href="/assets/vendor/bootstrap-multiselect/bootstrap-multiselect.css" />
+	<link rel="stylesheet" href="/assets/vendor/jstree/themes/default/style.css" />
+
+	<link rel="stylesheet" href="/assets/stylesheets/theme.css" />
+	<link rel="stylesheet" href="/assets/stylesheets/theme-custom.css">
+	<link rel="stylesheet" type="text/css" href="/css/reg.css">
+
+	<link rel="stylesheet" href="/assets/stylesheets/validationEngine.jquery.css" />
+	<link rel="stylesheet" type="text/css" href="/assets/vendor/showLoading/css/showLoading.css" />
+	<link rel="stylesheet" href="/assets/vendor/jquery-datatables/jquery.dataTables.min.css" />
+	<link rel="stylesheet" type="text/css" href="/css/common.css">
+	<link rel="stylesheet" type="text/css" href="/css/weather.css" />
+	<link rel="stylesheet" type="text/css" href="pvcurve/css/pvcurve.css" />
+	<!--<link rel="stylesheet" href="//cache.amap.com/lbs/static/main.css?v=1.0" />-->
+	<link rel="stylesheet" type="text/css" href="assets/vendor/liMarquee/css/liMarquee.css" />
+	<!-- <link rel="stylesheet" type="text/css" href="/assets/vendor/style-switcher/.css" /> -->
+	<!--è¿ä¸ªæ¯æ¥åéæ©çjså¿é¡»æ¾å°æåé¢ -->
+	<script src="/assets/vendor/modernizr/modernizr.js"></script>
+	<script src="/assets/vendor/vue/vue.js" type="text/javascript" charset="utf-8"></script>
+	<link rel="stylesheet" type="text/css" href="/assets/vendor/elementui/elementui.css">
+	<link rel="stylesheet" type="text/css" href="/assets/vendor/elementui/icon.css">
+	<script src="/assets/vendor/elementui/elementui.js" type="text/javascript" charset="utf-8"></script>
+	<script type="text/javascript">
+		var hostname = window.document.location.hostname
+		if (hostname == "www.renovigi.solar") {
+			console.log("www.renovigi.solar")
+			document.write("<link href=\"/dingzhi/renovigi/reg.css\" rel=\"stylesheet\" type=\"text/css\">")
+			document.write("<link href=\"/dingzhi/renovigi/theme.css\" rel=\"stylesheet\" type=\"text/css\">")
+		}
+		else {
+			console.log("woshiElse")
+			document.write("<link href=\"/css/reg.css\" rel=\"stylesheet\" type=\"text/css\">")
+			document.write("<link href=\"/assets/stylesheets/theme.css\" rel=\"stylesheet\" type=\"text/css\">")
+		}
+		console.log("woshijiewei")
+	</script>
+
+	<style type="text/css">
+		.tableStyle thead tr:first-child {
+			background-color: #e7f3e9;
+		}
+
+		.tableStyle thead tr th {
+			text-align: center;
+		}
+
+		.tableStyle tr:nth-child(odd) {
+			background-color: white;
+		}
+
+		.hengtongyuan {
+			display: none;
+			margin: 20px;
+			font-size: 20px;
+			color: red;
+		}
+	</style>
+</head>
+
+<body>
+	<section class="body">
+		<!-- header -->
+		<header class="header" id="headPlos" style="background: none;border:none;">
+			<!-- ===============================================================================åæ¢çµç«====================================== -->
+
+			<div class="logo-container">
+				<a href="#" class="logo" onclick="checkUserPlantlist()">
+					<img src="" id="cusMainImg" />
+				</a>
+				<div class="userbox plantlist">
+					<a href="#" data-toggle="dropdown">
+						<i class="fa fa-cubes"></i>
+						<div class="profile-info">
+							<!-- ç¹å«æ³¨ææ­¤å¤ä¸è½ç¨langæ ç­¾åæ¢è¯­è¨,å¦åæ æ³æ¾ç¤ºéä¸­äºåªä¸ªçµç« -->
+							<span class="name" id="checkedPlant"></span>
+						</div>
+						<i class="fa custom-caret"></i>
+					</a>
+
+					<div class="dropdown-menu" id="plantlist">
+						<em class="curPlantId"></em>
+						<ul class="list-unstyled" style="max-height: 600px;overflow-y:auto ;">
+
+						</ul>
+					</div>
+
+				</div>
+			</div>
+
+			<div class="header-left">
+
+				<button class="btn btn-primary1" type="button" id="msgBtn" style="display: none;">
+					æ¶æ¯<span class="badge" id="MsgBoxCount">0</span>
+				</button>
+			</div>
+			<marquee width="200" hight="40" behavior="scroll" direction="" class="hengtongyuan">
+				å¨å½ç­çº¿çµè¯ï¼4008096133
+			</marquee>
+			<!-- ===============================================================================ç³»ç»è®¾ç½®ä¸è¯­è¨åæ¢====================================== -->
+			<div class="header-right">
+				<!-- <span class="separator"></span>
+					<div class="userbox">
+					  <select id="selectNode"  style="height: 40px; background: #189bf5;color: #000;border:#189bf5"></select>
+					</div> -->
+				<button class="btn btn-primary1" type="button" id="API_Plass" style="background: #fff;display: none;">
+					<span lang="YezAPI_">APIç³è¯·</span>
+				</button>
+				<span class="separator"></span>
+				<div id="userbox" class="userbox">
+					<a href="#" data-toggle="dropdown">
+						<figure class="profile-picture">
+							<img src="/assets/images/user_pic.jpg" alt="Xie" class="img-circle"
+								data-lock-picture="/assets/images/%21logged-user.jpg" />
+						</figure>
+						<div class="profile-info">
+							<span class="name" id="userInfo"></span>
+							<span class="name"></span>
+						</div>
+						<i class="fa custom-caret"></i>
+					</a>
+
+					<div class="dropdown-menu  main-shine-menu">
+						<ul class="list-unstyled">
+							<li>
+								<a role="menuitem" tabindex="-1" href="#" onclick="go2System()">
+									<i class="fa fa-user"></i>
+									<span lang="system_settings">ç³»ç»è®¾ç½®</span>
+
+								</a>
+							</li>
+							<li class="accountGoshop" style="display: none;">
+								<a role="menuitem" tabindex="-1" href="#" id="accountGoshop">
+									<i class="fa fa-link"></i>
+									<span lang="shop_mall">åå</span>
+								</a>
+							</li>
+							<li>
+								<a role="menuitem" tabindex="-1" href="#" id="accountLogout">
+									<i class="fa fa-power-off"></i>
+									<span lang="log_out">éåº</span>
+								</a>
+							</li>
+						</ul>
+					</div>
+				</div>
+
+				<span class="separator"></span>
+				<div class="userbox">
+					<a href="#" data-toggle="dropdown">
+						<div class="profile-info">
+							<span class="name" id="mainCurLang"></span>
+						</div>
+						<i class="fa custom-caret"></i>
+					</a>
+
+					<div class="dropdown-menu">
+						<!--  ç¹å«æ³¨æaéé¢çåå®¹ä¸å®ä¸è¦æç©ºæ ¼ -->
+						<ul class="list-unstyled">
+							<li>
+								<a role="menuitem" tabindex="-1" href="#" onclick="changLangMain(this.text)">English</a>
+							</li>
+							<li>
+								<a role="menuitem" tabindex="-1" href="#" onclick="changLangMain(this.text)">ä¸­æ</a>
+							</li>
+							<li>
+								<a role="menuitem" tabindex="-1" href="#" onclick="changLangMain(this.text)">ä¸­æç¹ä½</a>
+							</li>
+							<li>
+								<a role="menuitem" tabindex="-1" href="#" onclick="changLangMain(this.text)">Svenska</a>
+							</li>
+							<li>
+								<a role="menuitem" tabindex="-1" href="#" onclick="changLangMain(this.text)">EspaÃ±ol</a>
+							</li>
+
+							<li>
+								<a role="menuitem" tabindex="-1" href="#"
+									onclick="changLangMain(this.text)">PortuguÃªs</a>
+							</li>
+							<li>
+								<a role="menuitem" tabindex="-1" href="#" onclick="changLangMain(this.text)">Polski</a>
+							</li>
+							<li>
+								<a role="menuitem" tabindex="-1" href="#" onclick="changLangMain(this.text)">India</a>
+							</li>
+							<li>
+								<a role="menuitem" tabindex="-1" href="#"
+									onclick="changLangMain(this.text)">Tiáº¿ngViá»t</a>
+							</li>
+							<li>
+								<a role="menuitem" tabindex="-1" href="#"
+									onclick="changLangMain(this.text)">Indonesian</a>
+							</li>
+						</ul>
+					</div>
+				</div>
+			</div>
+
+		</header>
+		<!-- inner-wrapper -->
+		<div class="inner-wrapper" id="mainArea">
+
+		</div>
+		<!-- footer -->
+		<footer class="footerCusIcp">
+			<p class="text-center mt-md mb-md footer-main">
+				<a href="https://beian.miit.gov.cn" class="cusIcp"></a>
+				<span class="cusIcp1" style="padding-left: 12px;">
+				</span>
+			</p>
+		</footer>
+	</section>
+	<!--æ¶æ¯çå­-->
+	<div class="modal fade" id="msgBox">
+		<div class="modal-dialog modal-lg" style="width: 1000px;">
+
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal" aria-label="Close">
+						<span aria-hidden="true">&times;
+						</span>
+					</button>
+					<h4 class="modal-title" lang="">æ¶æ¯è¯¦æ
+					</h4>
+				</div>
+				<div class="modal-body" id="msgtable" style="height: 600px;overflow-y: auto;">
+					<table class="table table-bordered mb-none tableStyle">
+						<thead>
+							<tr>
+								<th>é¦æ¬¡åçæ¶é´</th>
+								<th>æå±çµç«</th>
+								<th>åè­¦ç±»å</th>
+								<th>åè­¦ç¼ç </th>
+								<th style="width: 100px;">è®¾å¤åºåå·</th>
+								<th>æ°éå¨ç¼å·</th>
+								<th>åè­¦æè¿°</th>
+								<th>å¤çç¶æ</th>
+								<th>æ¶å¤±æ¶é´</th>
+							</tr>
+						</thead>
+						<tbody id="msgbody">
+						</tbody>
+					</table>
+
+				</div>
+				<div id="pageMsg" class="page1">
+
+				</div>
+			</div>
+		</div>
+	</div>
+	<!-- apiç³è¯·model -->
+	<div id="addCompanyKeyModal" class="modal fade" tabindex="-1" role="dialog" aria-hidden="true"
+		data-backdrop="false">
+		<div class="modal-dialog">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+					<h4 class="modal-title" lang="YezAPI_01">APIç³è¯·ç¼è¾</h4>
+				</div>
+				<div class="modal-body form-horizontal">
+					<div class="form-group has-feedback">
+						<label for="addCompanyCompanyName" class="col-sm-3 control-label"><span
+								class="warning">*</span><span lang="YezAPI_02">å¬å¸åç§°</span></label>
+						<div class="col-sm-9">
+							<input type="text" name="addCompanyCompanyName" id="addCompanyCompanyName"
+								class="form-control" autocomplete="off" placeholder="å®¢æ·å¬å¸åç§°å¨ç§°"
+								style="display: inline;width: 60%;" />
+							<span class="info-show"></span>
+						</div>
+					</div>
+					<div class="form-group has-feedback">
+						<label for="addCompanyDomain" class="col-sm-3 control-label"><span class="warning">*</span><span
+								lang="YezAPI_04">ååå¨ç§°</span></label>
+						<div class="col-sm-9">
+							<input type="text" name="addCompanyDomain" id="addCompanyDomain" class="form-control"
+								autocomplete="off" placeholder="å®¢æ·ååå¨ç§°" style="display: inline;width: 60%;" />
+							<span class="info-show"></span>
+						</div>
+					</div>
+					<div class="form-group has-feedback">
+						<label for="addCompanyVersion" class="col-sm-3 control-label"><span class="warning">*</span>
+							<span lang="YezAPI_06">çæ¬å·</span> </label>
+						<div class="col-sm-9">
+							<input type="text" id="addCompanyVersion" name="addCompanyVersion" class="form-control"
+								autocomplete="off" placeholder="å®¢æ·è°ç¨çappçæ¬å·" style="display: inline;width: 60%;" />
+							<span class="info-show"></span>
+						</div>
+					</div>
+					<div class="form-group has-feedback">
+						<label for="addCompanyContactinformation" class="col-sm-3 control-label"><span
+								class="warning">*</span> <span lang="YezAPI_08">èç³»æ¹å¼</span> </label>
+						<div class="col-sm-9">
+							<input type="text" id="addCompanyContactinformation" name="addCompanyContactinformation"
+								class="form-control" autocomplete="off" placeholder="å®¢æ·èç³»æ¹å¼"
+								style="display: inline;width: 60%;" />
+							<span class="info-show"></span>
+						</div>
+					</div>
+					<div class="form-group has-feedback">
+						<label for="addCompanyClient" class="col-sm-3 control-label"><span class="warning">*</span>
+							<span lang="YezAPI_10">å¹³å°</span> </label>
+						<div class="col-sm-9">
+							<select id="addCompanyClient" class="form-control" style="display: inline;width: 60%;">
+								<option value="web">Web</option>
+								<option value="android">android</option>
+								<option value="ios">ios</option>
+							</select>
+							<span class="info-show"></span>
+						</div>
+					</div>
+					<div class="form-group has-feedback">
+						<label for="addCompanyDesc" class="col-sm-3 control-label"><span class="warning">*</span> <span
+								lang="YezAPI_11">æè¿°</span> </label>
+						<div class="col-sm-9">
+							<input type="text" id="addCompanyDesc" class="form-control" name="addCompanyDesc"
+								autocomplete="off" placeholder="æè¿°" style="display: inline;width: 60%;" />
+							<span class="info-show"></span>
+						</div>
+					</div>
+					<div class="form-group has-feedback">
+						<label class="col-sm-3 control-label"> <span lang="YezAPI_12">APIè°åè¯´æ</span> </label>
+						<div class="col-sm-9" style="    margin-top: 6px;">
+							<span style="color: blue;
+							 text-decoration: underline;
+							 cursor: pointer;" id="urlPoliu">https://api.shinemonitor.com/</span>
+						</div>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<div id="addCompanyKeyTip" style="float: left;color: red;margin-left: 10%;display: block;"></div>
+					<button type="button" class="btn btn-default" data-dismiss="modal" lang="cancel">åæ¶</button>
+					<button id="addCompanyKeySubmit" type="button" class="btn btn-info" data-loading-text="ä¿®æ¹&hellip;"
+						lang="YezAPI_commit">æäº¤</button>
+				</div>
+			</div>
+		</div>
+	</div>
+	<!-- æµéé¢è­¦æ¨¡ææ¡ -->
+	<div class="modal fade" id="flowExpirationDetection">
+		<div class="modal-dialog">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span
+							aria-hidden="true">&times;</span></button>
+					<h4 class="modal-title" lang="expiration_Warning">æµéå¡å°æé¢è­¦
+					</h4>
+				</div>
+				<div class="modal-body">
+					<p lang="expiration_Warning_Title">å°æ¬çç¨æ·æ¨å¥½ï¼</p>
+					<p lang="expiration_Warning_Body" style="text-indent:2em;">
+						&nbsp;&nbsp;&nbsp;&nbsp;åç°æ¨æä½¿ç¨è®¾å¤çæµéå¡å³å°å°æï¼å¦æªåæ¶åå¼ï¼åä¼é æè¯¥æµéå¡è¢«è¿è¥åæ³¨éä¸ä¸è½ç»§ç»­ä½¿ç¨ãä¸ºäºä¸å½±åæ¨çæ­£å¸¸ä½¿ç¨ï¼è¯·åæ¶å¯¹é¢è­¦ç¶æçè®¾å¤è¿è¡åå¼ï¼
+					</p>
+				</div>
+				<div class="row">
+					<div id="pwdPrompt" class="addColDisplay hidden text-center">
+						<span class="add_col_fail"></span>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-info" id="nowRecharge">
+						<span lang="now_recharge">ç«å³åå¼</span>
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+</body>
+
+</html>
+<script src="/managesystemnew/js/echarts.common.min.js" type="text/javascript" charset="utf-8"></script>
+<!-- <script src="https://cdn.jsdelivr.net/npm/xgplayer@2.9.6/browser/index.js" type="text/javascript" charset="utf-8"></script> -->
+<script src="/assets/vendor/xgplayer/browser/index.js" type="text/javascript" charset="utf-8"></script>
+<!-- <script src="https://cdn.jsdelivr.net/npm/xgplayer-hls/dist/index.min.js" type="text/javascript" charset="utf-8"></script> -->
+<script src="/assets/vendor/xgplayer/xgplayer-hls/index.min.js" type="text/javascript" charset="utf-8"></script>
+<!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maptalks/dist/maptalks.css"> -->
+<link rel="stylesheet" href="/assets/vendor/maptalks/css/maptalks.css">
+<!-- maptalkså°å¾ -->
+<!-- <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/maptalks/dist/maptalks.min.js"></script> -->
+<script src="/assets/vendor/maptalks/js/maptalks.min.js" type="text/javascript" charset="utf-8"></script>
+<script src="/assets/vendor/ezuikit/ezuikit.js" type="text/javascript" charset="utf-8"></script>
+<!-- maptalkså°å¾ -->
+<script src="/assets/vendor/jquery/jquery-2.1.4.min.js" type="text/javascript" charset="utf-8"></script>
+<script src="/assets/vendor/laydate/laydate.js" type="text/javascript" charset="utf-8"></script>
+<!-- ç¬¬ä¸æ¹æä»¶å è½½ï¼ææ¶å¨å½åä¼å åä¸åºæ¥ï¼ç°æå®æ¹ä¸ºæ¬å° -->
+<link rel="stylesheet" href="/assets/vendor/select2/css/select2.css" />
+<script type="text/javascript" src="/assets/vendor/select2/js/select2.js"></script>
+<!-- Â <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.12/css/select2.min.css" />
+Â Â  Â <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.12/js/select2.min.js" ></script> -->
+<!--layuiæ¶é´æä»¶-->
+<script src="/js/layer/layer.js" type="text/javascript" charset="utf-8"></script>
+<!--ç±»uiå¼¹åºå± -->
+<script src="/assets/vendor/bootstrap/js/bootstrap.js" type="text/javascript" charset="utf-8"></script>
+<!-- bootstrapåºç¬¬äºç-->
+<script src="/assets/vendor/bootstrap-datepicker/js/bootstrap-datepicker.js" type="text/javascript"
+	charset="utf-8"></script>
+<!-- å¸¦è±ææ¶é´éæ©æä»¶è®¾å¤æ°æ®æç»éæ©ç¨ï¼å¯æ¿æ¢layuiçæ¶é´éæ©-->
+<script src="/assets/vendor/jquery-ui/jquery-ui.js" type="text/javascript" charset="utf-8"></script>
+<!--jquery ui æ¡æ¶ -->
+<script src="/assets/vendor/jstree/jstree.js" type="text/javascript" charset="utf-8"></script>
+<!-- è®¾å¤æ æä»¶ï¼åºäºjquery -->
+<script src="/assets/vendor/jquery-datatables/media/js/jquery.dataTables.js" type="text/javascript"
+	charset="utf-8"></script>
+<!--è¡¨æ ¼æ¸²ææä»¶ -->
+<script src="/assets/vendor/jquery-datatables/extras/TableTools/js/dataTables.tableTools.min.js" type="text/javascript"
+	charset="utf-8"></script>
+<!--æ­éè¡¨æ ¼æ¸²æä½¿ç¨ -->
+<script src="/js/jquery.ajaxQueue.min.js" type="text/javascript" charset="utf-8"></script>
+<!--ajaxéåå -->
+<script src="/js/echartsnew/dist/echarts.js"></script>
+<script src="/js/echarts/dist/echarts.js" type="text/javascript" charset="utf-8"></script>
+<!-- å¾æ æä»¶ -->
+<script src="/assets/vendor/showLoading/jquery.showLoading.min.js" type="text/javascript" charset="utf-8"></script>
+<!-- å è½½ä¸­ -->
+<script src="//cache.amap.com/lbs/static/es5.min.js" type="text/javascript" charset="utf-8"></script>
+<!--é«å¾·å°å¾ -->
+<script src="//webapi.amap.com/maps?v=1.3&key=3066f0d8b9a5f187b8905b14d653585d" type="text/javascript"
+	charset="utf-8"></script>
+	<script src="./plant/swiper/swiper-bundle.min.js" type="text/javascript" charset="utf-8"></script>
+<!--é«å¾·å°å¾ -->
+<script src="/js/qrcode/jquery.qrcode.js" type="text/javascript" charset="utf-8"></script>
+<!--äºç»´ç çææä»¶ -->
+<script src="/js/qrcode/qrcode.js" type="text/javascript" charset="utf-8"></script>
+<!--æ­éäºç»´ç çææä»¶ä½¿ç¨ -->
+<script src="/assets/vendor/liMarquee/js/jquery.liMarquee.js" type="text/javascript" charset="utf-8"></script>
+<!--//æå­æ»å¨æä»¶-->
+<script src="/vendor_new/js/paging.min.js" type="text/javascript" charset="utf-8"></script>
+<!--åé¡µæä»¶-->
+<script src="/assets/javascripts/rc4.js" type="text/javascript" charset="utf-8"></script>
+<script src="/assets/javascripts/sha1-min.js" type="text/javascript" charset="utf-8"></script>
+<!-- sha256_HMACå å¯æ¹å¼ -->
+<script src="/assets/javascripts/sha256_HMAC.js" type="text/javascript" charset="utf-8"></script>
+<script type='text/javascript' src='/js/jsaddr.js'></script>
+<!--çå¸å¿ä¸çº§èå¨-->
+<script src="js/map.js" type="text/javascript" charset="utf-8"></script>
+<!-- å½å®¶æ¶åºæ å°è¡¨ -->
+<script src="/assets/javascripts/mappingTable.js"></script>
+<!--<script src="" type="text/javascript" charset="utf-8" id="scripttest"></script>-->
+<script type="text/javascript">
+	//å°éè¦è¿è¡çæ¬æ§å¶çjsæ¾å°æ°ç»ä¸­å¨æå è½½å³å¯é¿åæµè§å¨ç¼å­é®é¢
+	var jsArr = [
+		"/js/libhttp.js",
+		"/js/misc.js",
+		"/js/language.js",
+		"/js/customer.js",
+	]
+	var jsStr = ""
+	for (var i = 0; i < jsArr.length; i++) {
+		jsStr += "<script type='text/javascript' src='" + jsArr[i] + "?" + VERSION + "'><\/script>"
+	}
+	//document.write()ç¼ºé·ï¼ææ¡£æµå³é­åï¼åå è½½èæ¬ä¼ä½¿é¡µé¢ç©ºç½ï¼å¨æå è½½çjsä¹ä¼é»æ­¢é¡µé¢æ¸²æï¼å ä¸ºä¸å»ºè®®å¨æ­¤æ¾è¿å¤js
+	document.open()
+	document.write(jsStr);
+	document.close()
+</script>
+<script src="/assets/javascripts/jquery.validationEngine.js" type="text/javascript" charset="utf-8"></script>
+<script src="/assets/javascripts/jquery.validationEngine-general.js" type="text/javascript" charset="utf-8"></script>
+<script type="text/javascript">
+
+	//		document.write(scripeStr)
+	//			document.write("<script type='text/javascript' src='http://maps.google.cn/maps/api/js?&language=" + MAPID + "&sensor=true&key=AIzaSyDRbbVGCfXIkdZV0kl0iQoxOicsacoj1sw'><\/script><script type='text/javascript' src='js/markerwithlabel.js'><\/script>");/**
+	/** * 
+	 * 
+	 * ä¹åå¼å¥jsççæ¬å¨svn2018.6.26ä¹åæ
+	 * 
+	 * */
+	function dynamicLoadJs(url, callback) {
+		var head = document.getElementById('scriptJs');
+		var script = document.createElement('script');
+		script.type = 'text/javascript';
+		script.src = url;
+		if (typeof (callback) == 'function') {
+			script.onload = script.onreadystatechange = function () {
+				if (!this.readyState || this.readyState === "loaded" || this.readyState === "complete") {
+					callback();
+					script.onload = script.onreadystatechange = null;
+				}
+			};
+		}
+		head.appendChild(script);
+	}
+</script>
+
+<script type="text/javascript">
+	var NO_PAGE_PLANT_ID = "";//ææçµç«IDä¸åé¡µ
+	var YES_EXIST_METER = false;
+	//			é²æ­¢å¤æ¬¡ç¹å»éåºæ¥å¼å¸¸
+	var accountLogoutid = true;
+	javascript: window.history.forward(1);
+	MAIN_CHOOSE_PLANT_ID = null;
+	MAIN_CHOOSE_PLANT_TIMEZONE = null;
+	intervalId = null; /*è®¾å¤ç®¡çé¡µé¢-å·æ°æ é´éid*/
+	$(document).ready(function () {
+		if (window.document.location.hostname == 'vsole.shinemonitor.com') {
+			$("#headPlos").css("background-color", "rgb(55,83,130)");
+			$("#headPlos").css("border-bottom-color", "rgb(55,83,130)");
+			$(".separator").css("background-color", "rgb(55,83,130)");
+			$(".btn-primary1").css("background-color", "rgb(55,83,130)");
+			$(".btn-primary1").hover(
+				function () {
+					// é¼ æ ç§»å¥æ¶æ¹åèæ¯é¢è²
+					$(this).css("border-color", "rgb(55, 83, 130)");
+				},
+				function () {
+					// é¼ æ ç§»åºæ¶æ¢å¤èæ¯é¢è²
+					$(this).css("border-color", "");  // æ¢å¤åå§èæ¯é¢è²
+				}
+			);
+		} else {
+			$("#headPlos").css("background-color", "#189bf5");
+			$("#headPlos").css("border-bottom-color", "#0f8adf");
+			$(".separator").css("background-color", "#189bf5");
+			$(".btn-primary1").css("background-color", "#189bf5");
+		}
+		checkCusInfo();
+		checkUserCurLang();
+		$("input[name='addCompanyCompanyName']").attr('placeholder', LANGJSON.YezAPI_03)
+		$("input[name='addCompanyDomain']").attr('placeholder', LANGJSON.YezAPI_05)
+		$("input[name='addCompanyVersion']").attr('placeholder', LANGJSON.YezAPI_07)
+		$("input[name='addCompanyContactinformation']").attr('placeholder', LANGJSON.YezAPI_09)
+		$("input[name='addCompanyDesc']").attr('placeholder', LANGJSON.YezAPI_11)
+		if (window.location.hostname == 'www.shinemonitor.com' || window.location.hostname == 'solar.test.eybond.com') {
+			$('#API_Plass').css('display', 'inline-block')
+		} else {
+			$('#API_Plass').css('display', 'none')
+		}
+		// $.get(document.location.protocol + "//img.shinemonitor.com/file/",
+		// 		{
+		// 			action: 'queryAllCustInfosByDomainName',
+		// 			domainName: window.document.location.hostname,
+		// 			sign: 'shinemonitor',
+		// 			salt: new Date().getTime(),
+		// 		},
+		// 		function (err, dat, desc) {
+		// 			if (err.err == 0) {
+		// 				$("#cusMainImg").attr('src', err.dat.logoMainStr);
+		// 				// $("body").css("background", "url(" +  err.dat.backgroundStr + ") center center no-repeat")
+		// 			} else {
+
+		// 			}
+		// 		});
+		// var DomainNameStr = window.document.location.hostname;
+		// var DomainNameIMG = new Image()
+		// DomainNameIMG.src = document.location.protocol + "//img.shinemonitor.com/img/custom/cus/"+DomainNameStr.replace(/\./g, '')+"/main.png"
+		// DomainNameIMG.onload =  function () {
+		// 	$("#cusMainImg").attr('src', document.location.protocol + "//img.shinemonitor.com/img/custom/cus/"+DomainNameStr.replace(/\./g, '')+"/main.png");
+		// 	// $("body").css("background", "url(" + document.location.protocol + '//img.shinemonitor.com/img/custom/cus/'+DomainNameStr.replace(/\./g, '')+'/background.png' + ") center center no-repeat")
+		// }
+		// DomainNameIMG.onerror =  function () {
+		// 	$("#cusMainImg").attr('src', "/assets/images/cus/shinemonitor/main.png");
+		// 	// $("body").css("background", "url(" + "/assets/images/cus/shinemonitor/background.png" + ") center center no-repeat")
+		// }
+		if (window.document.location.hostname == "htysolar.shinemonitor.com") {
+			$(".hengtongyuan").show()
+		}
+
+		time = setInterval(function () {
+			if ($("#statistic01").length > 0) {
+				loadDataNoPlant()
+			} else if (($("#stats00").length > 0) && ($("#plantBasic").css("display") == "block")) {
+				loadStatistics()
+			}
+			applyEllipsis()
+		}, 60000)
+		if (storage_i18n_get_id() == 0) {
+			$("#msgBtn").show()
+		} else if (storage_i18n_get_id() == 6) {
+			$(".footerCusIcp").hide()
+		} else {
+			// éæº
+			$(".footerCusIcp").hide()
+			//ååè·³è½¬
+			if (window.document.location.hostname == "www.shinemonitor.com")
+				$(".accountGoshop").show()
+		}
+		$("#mainCurLang").text(storage_i18n_get());
+
+		checkLogin();
+		getMsgBoxCount()
+		getmsgbody(0)
+		$("#userInfo").text(getCurrentUsername());
+		$("#userInfo").next("span").text(getCurrentRoleName());
+		$("#msgBtn").click(function () {
+			http_async_request_public("&action=webEditMsgBox", function (err, dat, desc) {
+				if (err == 0) {
+					getMsgBoxCount()
+				}
+			})
+			$("#msgBox").modal()
+		})
+		// apiç³è¯·
+		$("#API_Plass").click(function () {
+			$("#addCompanyKeyModal").modal()
+			if (getInterLang() != "zh_CN" && getInterLang() != "zh_HK") {
+				$('#urlPoliu').text('https://api.shinemonitor.com/en/')
+			} else {
+				$('#urlPoliu').text('https://api.shinemonitor.com')
+			}
+			$('#addCompanyCompanyName').val('').next().html('');
+			$('#addCompanyDomain').val('').next().html('');
+			$('#addCompanyVersion').val('').next().html('');
+			$('#addCompanyContactinformation').val('').next().html('');
+			$('#addCompanyClient').val('web').next().html('');
+			// $('#addCompanyKey').val('').next().html('');
+			$('#addCompanyDesc').val('').next().html('');
+			// $('#addCompanyEnable').val('true').next().html('');
+			$('#addCompanyKeyTip').text('');
+		})
+		$('#urlPoliu').click(function () {
+			if (getInterLang() != "zh_CN" && getInterLang() != "zh_HK") {
+				window.open('https://api.shinemonitor.com/en/', '_black')
+			} else {
+				window.open('https://api.shinemonitor.com', '_black')
+			}
+		})
+		// ç¡®è®¤
+		$("#addCompanyKeySubmit").click(function () {
+			addCompanyKey();
+		});
+		$("#accountLogout").click(function () {
+			localStorage.removeItem('KAIP')
+			localStorage.removeItem('tsKAIP')
+			if (accountLogoutid) {
+				accountLogout()
+				accountLogoutid = false
+			} else {
+				window.location.href = "index.html"; //ä»¥åæ¯/index.html";
+			}
+		})
+		$("#accountGoshop").click(function () {
+			window.open('https://eybond.en.alibaba.com', '_blank')
+		})
+	});
+	// // è·åæå¡å¨èç¹
+	// http_async_request_public("&action=queryDomainList&source=1&_app_client_=web&_app_id_="+window.document.location.hostname+"&_app_version_=1.0.6.3&i18n=" + getInterLang(), function(err, dat) {
+	// 	if(err == 0) {
+	//     for (var i = 0; i < dat.length; i++) {
+	// 			if(HTTP_INTERFACE_ADDRESS_NEW.includes(dat[i].url)){
+	// 				$('<option selected value = "' + dat[i].url + '" title="' + dat[i].name + '">' + dat[i].name + '</option>').appendTo($("#selectNode"))
+	// 			}else{
+	// 				$('<option value = "' + dat[i].url + '" title="' + dat[i].name + '">' + dat[i].name + '</option>').appendTo($("#selectNode"))
+	// 			}
+	// 	    }
+	// 		if(JSON.parse(window.localStorage.getItem("selectNodeValue")) == null||JSON.parse(window.localStorage.getItem("selectNodeValue")) == ''||JSON.parse(window.localStorage.getItem("selectNodeValue")) == undefined){
+	// 			if(dat.length==0){
+	// 				$('<option value = "'+ HTTP_INTERFACE_ADDRESS_NEW +'">'+getMultiLangError("Default_node")+'</option>').appendTo($("#selectNode "))
+	// 			}
+	// 		}else{
+	// 			$("#selectNode").val(JSON.parse(window.localStorage.getItem("selectNodeValue")))
+	// 		}
+	// 	} else {
+	// 		$('<option value = "'+ HTTP_INTERFACE_ADDRESS_NEW +'">'+getMultiLangError("Default_node")+'</option>').appendTo($("#selectNode "))
+	// 	}
+	// }, function()
+	// {
+	// 	$('<option value = "' + HTTP_INTERFACE_ADDRESS_NEW + '">'+getMultiLangError("Default_node")+'</option>').appendTo($("#selectNode "))
+	// })
+	// //èç¹åæ¢
+	// $("#selectNode").bind("change", function() {
+	// 	var status = $("#selectNode option:selected").val()
+	// 	window.localStorage.setItem("selectNodeValue", JSON.stringify(status));
+	// 	window.location.reload();
+	// })
+	//  apiç³è¯·
+	function addCompanyKey() {
+		var companyName = $("#addCompanyCompanyName").val();
+		var domain = $("#addCompanyDomain").val();
+		var version = $("#addCompanyVersion").val();
+		var contactinformation = $("#addCompanyContactinformation").val();
+		var client = $("#addCompanyClient").val();
+		var desc = $("#addCompanyDesc").val();
+		if (companyName.length == 0 || domain.length == 0 || version.length == 0 || contactinformation.length == 0
+			|| client.length == 0 || desc.length == 0) {
+			$('#addCompanyKeyTip').text(getMultiLangError('api_tlous'));
+		} else {
+			var action = encodeURI("&action=addCompanyKey&companyname=" + companyName + "&domain=" + domain
+				+ "&version=" + version + "&contactinformation=" + contactinformation + "&client=" + client
+				+ "&desc=" + desc + "&enable=" + false);
+			http_async_request_public(action, function (err, dat, desc) {
+				if (err == WS_ERR_NONE) {
+					$("#addCompanyKeyModal").modal('hide');
+				} else if (err == 7) {
+					$('#addCompanyKeyTip').text(getMultiLangError('api_tlous'));
+				} else if (err == 8) {
+					$('#addCompanyKeyTip').text(getMultiLangError('api_tlous1'));
+				} else {
+					$('#addCompanyKeyTip').text(getMultiLangError('api_tilr') + ':' + desc + '');
+				}
+			}, function () {
+				console.log("æäº¤å¤±è´¥");
+			});
+		}
+	}
+	//çæµæ¯å¦ç»éäº,æå-çæé¡¶é¨ä¸æåè¡¨,å¤±è´¥-æç¤ºéæ°ç»é
+	function checkLogin() {
+		if (!storage_check_login()) {
+			window.location.href = "/errorNoLogin.html";
+			return;
+		}
+		var currUsr = storage_get_current_usr();
+		if (currUsr.dat.role === USR_ROLE_GROUP) //å¦æä¸ºéå¢è´¦å·çè¯,è·³è½¬è³
+		{
+			$("#checkedPlant").text("çµç«æ»è§");
+			var item = "<li onclick='go2GroupMain()'><a role='menuitem' tabindex='-1' href='#'>" + "çµç«æ»è§" + "</a></li>";
+			$("#plantlist ul").append(item);
+			go2GroupMain();
+			return;
+		}
+		getPlantList();
+	}
+	if (getInterLang() == "zh_CN") {
+		sessionStorage.removeItem("trafficWarningLoad");
+		sessionStorage.removeItem("trafficWarningType");
+		flowExpirationDetection()
+	}
+
+	//æµéå°æé¢è­¦
+	function flowExpirationDetection() {
+		http_async_request_public("&action=flowExpirationDetection", function (err, dat, desc) {
+			if (err == 0) {
+				if (dat.total > 0) {
+					$('#flowExpirationDetection').modal('show')
+					sessionStorage.setItem("trafficWarningLoad", dat.item[0].maxLoad);
+					sessionStorage.setItem("trafficWarningType", dat.item[0].cType);
+				}
+			}
+		})
+	}
+
+	//ç¹å»ç«å³åå¼åå¾åå¼é¡µé¢
+	$("#nowRecharge").click(function () {
+		IS_Flow_Expiration_Detection = true
+		$('#flowExpirationDetection').modal('hide')
+		setTimeout(() => {
+			loadHtml("mainArea", "/sys/systemSettings.html");
+		}, 500);
+	})
+	var IS_Flow_Expiration_Detection = false
+
+	function go2GroupMain() {
+		loadHtml("mainArea", "groupPlantList.html");
+	}
+	/*çææ®éç¨æ·ä¸»é¡µé¢é¡¶é¨çµç«ä¸æåè¡¨,è·³è½¬é¡µé¢*/
+	function getPlantList() {
+		$("#checkedPlant").text(getMultiLangError("plants_overview"));
+		$("#mainArea").showLoading()
+
+		http_async_request_public("&action=queryPlantsInfo", function (err, dat) /* è¿åç¨æ·ççµç«åè¡¨. */ {
+			$("#mainArea").hideLoading();
+			if (err == WS_ERR_NONE) {
+				var plantSum = "<li onclick='go2Main()'><a role='menuitem' tabindex='-1' href='#'>" + getMultiLangError("plants_overview") + "</a></li>" + "<li onclick='main2AddPlant()'><a role='menuitem' tabindex='-1' href='#'>" + getMultiLangError("add_plant") + "</a></li>";
+				$("#plantlist ul").append(plantSum);
+				var plant = dat.info;
+				for (var i = 0; i < plant.length; i++) {
+					var item = "<li onclick='getPlantId(this.id)' id=" + "plant_" + plant[i].pid + "><a role='menuitem' tabindex='-1' href='#'' > " + plant[i].pname + "</a></li>";
+					$("#plantlist ul").append(item);
+					NO_PAGE_PLANT_ID += plant[i].pid + (plant.length == i + 1 ? "" : ",")
+				}
+				var url = window.location.href;
+
+				if (url.indexOf("forwardplantid") > 0) /** ç±æä¸ªä¸çº§ç¨æ·è·³è½¬èæ¥. */ {
+					//						èçurlæªå
+					//						var key = "forwardplantid";
+					//						var plantId = "plant_" + url.substring((url.indexOf(key) + key.length + 1), url.length);
+					//						 æ°çurlæªå			
+
+					var plantId = "plant_" + GetRequest().forwardplantid;
+					getPlantId(plantId);
+					return;
+				}
+				if (plant.length == 1) /** åªæä¸ä¸ªçµç«. */ {
+					var id = "plant_" + plant[0].pid;
+					getPlantId(id);
+				} else {
+					loadHtml("mainArea", "/plant/plantlist.html");
+				}
+			} else {
+				//æ²¡æçµç«,è·åè·åçµç«å¤±è´¥çæ¶å,ä¾ç¶è¦å è½½ä¸»é¡µé¢
+				var plantSum = "<li onclick='go2Main()'><a role='menuitem' tabindex='-1' href='#'>" + getMultiLangError("plants_overview") + "</a></li>" + "<li onclick='main2AddPlant()'><a role='menuitem' tabindex='-1' href='#'>" + getMultiLangError("add_plant") + "</a></li>";
+				$("#plantlist ul").append(plantSum);
+				loadHtml("mainArea", "/plant/plantlist.html");
+			}
+		},
+			function () {
+				$("#mainArea").hideLoading();
+				console.log("ä¸»é¡µé¢ä¸æåè¡¨çæå¤±è´¥"); /* åä¸å°çµç«. */
+			});
+	}
+
+	// ç¹å»ç³»ç»è®¾ç½®
+	function go2System() {
+		loadHtml("mainArea", "/sys/systemSettings.html");
+	}
+
+	function go2System2() {
+		loadHtml("mainArea", "/sys/systemSettings2.html");
+	}
+	// //çµç«æ»è§å è½½ä¸­
+	// function mainStatusLoading() {
+	// 	for(var i = 0; i < 11; i++) {
+	// 		$("<img src='/assets/vendor/showLoading/images/482.gif' style='width:30px;'/>").appendTo($("#statistic" + (i < 10 ? "0" + i : i)))
+	// 	}
+
+	// }
+	// //çµç«æ»è§å è½½å®æåæ­¢è½¬å
+	// function mainStatusHideLoad() {
+	// 	for(var i = 0; i < 11; i++) {
+	// 		$("#statisticDD" + (i < 10 ? "0" + i : i)).children("img").remove();
+	// 	}
+	// }
+
+	// // åç¬ä¸ºçµæ± æ·»å å è½½åå
+	// function onlyForBattery(num) {
+	// 	if(num != -1) {
+	// 		$("#statisticDD08").showLoading();
+	// 	} else {
+	// 		$("#statisticDD08").hideLoading();
+	// 	}
+	// 	$("#statisticDD08").hideLoading();
+	// }
+	//----------------------------------------------------------------------------------------------------
+	// è·å
+	//----------------------------------------------------------------------------------------------------
+	//å»è·åçµç«æ»è§æ°æ®
+	function loadDataNoPlant() {
+		var flag = window.document.location.hostname === "ksolare.shinemonitor.com" ? ",PR,CUF" : "";
+		//public
+		var action = "&action=queryPlantsCurrentData&par=ENERGY_TODAY,ENERGY_MONTH,ENERGY_YEAR,ENERGY_TOTAL,ENERGY_PROCEEDS,ENERGY_COAL,ENERGY_CO2,ENERGY_SO2,BATTERY_SOC" + flag + "&i18n=" + getInterLang() + "&lang=" + getInterLang()
+		//var action = "&action=plantStatistic&par=ENERGY_TODAY,ENERGY_MONTH,ENERGY_YEAR,ENERGY_TOTAL,ENERGY_PROCEEDS,ENERGY_COAL,ENERGY_CO2,ENERGY_SO2,BATTERY_SOC" 
+		var currUsr = storage_get_current_usr().dat;
+		var salt = new Date().getTime();
+		var sign = hex_sha1(salt + currUsr.secret + currUsr.token + action);
+		var url = HTTP_INTERFACE_ADDRESS_NEW + "?sign=" + sign + "&salt=" +
+			salt + "&token=" + currUsr.token + action;
+		var ajax = $.ajax({
+			async: true,
+			type: "get",
+			url: url,
+			dataType: "jsonp",
+			jsonp: "callback",
+			success: function (data, status) {
+				var dat = eval(data);
+				var err = dat.err;
+				var json = dat.dat;
+				var jsonLength = json ? json.length : 0;
+				if (err == WS_ERR_NONE) {
+					//                      		mainStatusHideLoad()
+					for (var i = 0; i < jsonLength; i++) {
+
+						if (i < 4) {
+							$("#statistic" + (i < 10 ? "0" + i : i)).html(formatKwh(json[i].val));
+						} else if (i == 4) {
+							var num = json[i].val.replace(/[^\d^\.]+/ig, "");
+							// $("#statistic04").html(getErrorCodeDesc2(GET_ERR_DESC, "err"+333)+num.substring(0,num.indexOf(".")+2));
+							$("#statistic04").html(json[i].val.substring(0, json[i].val.indexOf(".") + 2));
+						} else if (i == 8) {
+							if (json[i].val == -1) {
+								$("#battery_soc").hide();
+								ifShowElectric();
+								onlyForBattery(json[i].val);
+							} else {
+								$("#battery_soc").show();
+								onlyForBattery(json[i].val);
+								$("#statistic08").html(formatPercentage(json[i].val));
+							}
+						} else if (i == 9) {
+							if (json[i].val == "null") {
+								$("#system_efficency").hide();
+							} else {
+								$("#statistic" + (i < 10 ? "0" + i : i)).html(json[i].val + '%');
+							}
+						} else if (i == 10) {
+							if (json[i].val == "null" && window.document.location.hostname == "ksolare.shinemonitor.com") {
+								$(".stats-middle-main").css('width', '590px')
+								$(".stats-summary").css('width', '590px')
+								$("#channel_utilization_factor").hide();
+							}
+							$("#statistic" + i).html(json[i].val + '%');
+						} else {
+							$("#statistic" + (i < 10 ? "0" + i : i)).html(formatKg(json[i].val));
+						}
+					}
+
+				} else {
+					mainStatusHideLoad()
+					for (var i = 0; i < 9; i++) {
+						$("#statistic" + (i < 10 ? "0" + i : i)).html('0.0');
+					}
+					// çµç«ä¸æ²¡æè®¾å¤ PRéè
+					if (window.document.location.hostname == "ksolare.shinemonitor.com") {
+						$("#statistic10").html('0.0');
+						$(".stats-middle-main").css('width', '590px')
+						$(".stats-summary").css('width', '590px')
+						$("#system_efficency").hide();
+						$("#channel_utilization_factor").hide();
+					}
+					console.log("çµç«æ»è§æ°æ®è·åå¤±è´¥: " + err);
+				}
+
+			},
+			error: function (XMLHttpRequest, textStatus, errorThrown) {
+				mainStatusHideLoad();
+				console.log("çµç«æ¦åµåä¸ªçµç«æ¥è¯¢å¤±è´¥")
+			},
+			complete: function (XMLHttpRequest, status) { //è¯·æ±å®æåæç»æ§è¡åæ°
+
+				if (status == 'timeout') { //è¶æ¶,statusè¿æsuccess,errorç­å¼çæåµ
+
+					ajax.abort();
+					console.log("è¶æ¶");
+				}
+			}
+		})
+	}
+
+	//åä¸ªçµç«-æ»è§  éåajaxæ¯ä¸ºäºé²æ­¢å¤å±åè°å¯¼è´åå­æº¢åº è®¾ç½®è¶æ¶æ¯ä¸ºäºé²æ­¢é¡µé¢é¿æ¶é´éæ­»
+	function loadStatistics() {
+		//		http_normal_oper("&action=plantCurrentData&id=" + MAIN_CHOOSE_PLANT_ID + "&par=ENERGY_TODAY,ENERGY_MONTH,ENERGY_YEAR,ENERGY_TOTAL,ENERGY_PROCEEDS,ENERGY_CO2,CURRENT_TEMP,CURRENT_RADIANT,BATTERY_SOC", function(err, json)
+		//		{
+		//var action = "&action=plantCurrentData&id=" + MAIN_CHOOSE_PLANT_ID + "&par=ENERGY_TODAY,ENERGY_MONTH,ENERGY_YEAR,ENERGY_TOTAL,ENERGY_PROCEEDS,ENERGY_CO2,CURRENT_TEMP,CURRENT_RADIANT,BATTERY_SOC,ENERGY_COAL,ENERGY_SO2"
+		var flag = window.document.location.hostname === "ksolare.shinemonitor.com" ? ",PR,CUF" : "";
+		var action = "&action=queryPlantCurrentData&plantid=" + MAIN_CHOOSE_PLANT_ID + "&par=ENERGY_TODAY,ENERGY_MONTH,ENERGY_YEAR,ENERGY_TOTAL,ENERGY_PROCEEDS,ENERGY_CO2,CURRENT_TEMP,CURRENT_RADIANT,BATTERY_SOC,ENERGY_COAL,ENERGY_SO2" + flag + "&i18n=" + getInterLang() + "&lang=" + getInterLang()
+		var currUsr = storage_get_current_usr().dat;
+		var salt = new Date().getTime();
+		var sign = hex_sha1(salt + currUsr.secret + currUsr.token + action);
+		var url = HTTP_INTERFACE_ADDRESS_NEW + "?sign=" + sign + "&salt=" +
+			salt + "&token=" + currUsr.token + action;
+		var ajax = $.ajax({
+
+			async: true,
+			type: "get",
+			url: url,
+			cache: false,
+			dataType: "jsonp",
+			jsonp: "callback",
+			timeout: 30000,
+			success: function (data, status) {
+				var dat = eval(data);
+				var err = dat.err;
+				var json = dat.dat;
+				var jsonLength = json ? json.length : 0;
+				if (err == WS_ERR_NONE) {
+					for (var i = 0; i < jsonLength; ++i) {
+						var num = json[i].val;
+						if (i < 4) {
+							$("#stats" + (i < 10 ? "0" + i : i)).text(formatKwh(num));
+						} else if (i == 4) {
+							$("#stats04").text(num.substring(0, num.length - 1));
+						} else if (i == 6) {
+							$("#stats05").text(formatKg(num));
+						} else if (i == 10) {
+							if (num == -1) {
+								$("#battery_soc").hide();
+								ifShowElectric();
+								onlyForBattery(num);
+							} else {
+								$("#battery_soc").show();
+								$("#stats10").text(formatPercentage(num));
+								onlyForBattery(num);
+							}
+
+						} else if (i == 8) {
+
+							if (num == "null") {
+								plantNoEnv(i);
+								if (json[9].val == "null") {
+									$("#statsOk07").text(formatKg(json[7].val))
+									$("#statsOk06").text(formatKg(json[5].val))
+								}
+							} else {
+								if (json[9].val != "null") {
+									$("#statsSec06,#statsSec07").hide()
+
+								}
+								plantHaveEnv(i);
+								$("#stats08").text(num + "â");
+							}
+
+						} else if (i == 11 || i == 12) {
+							if (i == 11 && num == "null") {
+								$("#system_efficency").hide();
+							} else if (i == 11) {
+								$("#stats" + i).text(num + '%');
+							} else {
+								$("#stats" + i).text(num + '%');
+							}
+							if (i == 12) {
+								if (window.document.location.hostname == "ksolare.shinemonitor.com") {
+									console.log(json[i].val, 'num');
+									if (num == "null") {
+										$(".stats-middle-basic").css('width', '590px')
+										$(".stats-summary").css('width', '590px')
+										$("#channel_utilization_factor").hide();
+									} else {
+										$("#channel_utilization_factor").show();
+									}
+
+								}
+							}
+						} else {
+							if (num == "null") {
+								plantNoEnv(i);
+							} else {
+								plantHaveEnv(i);
+								$("#stats09").text(num + "kW/m2");
+							}
+
+						}
+					}
+				} else {
+					plantStatusHideLoad();
+					for (var i = 0; i < 11; ++i) {
+						if (i >= 10) {
+							$("#stats10").text("0.0");
+						} else if (i == 6 || i == 7) {
+							$("#statsOk" + (i < 10 ? "0" + i : i)).text("0.0");
+						}
+						else {
+							$("#stats" + (i < 10 ? "0" + i : i)).text("0.0");
+						}
+					}
+					// çµç«ä¸æ²¡æè®¾å¤ PRéè
+					if (window.document.location.hostname == "ksolare.shinemonitor.com") {
+						$("#stats12").text("0.0");
+						$("#system_efficency").hide();
+						$("#channel_utilization_factor").hide();
+					}
+					console.log("çµç«æ¦åµåä¸ªçµç«æ¥è¯¢å¤±è´¥: " + err);
+				}
+
+				loadDeviceCount();
+			},
+			error: function (XMLHttpRequest, textStatus, errorThrown) {
+				plantStatusHideLoad();
+				console.log("çµç«æ¦åµåä¸ªçµç«æ¥è¯¢å¤±è´¥")
+			},
+			complete: function (XMLHttpRequest, status) { //è¯·æ±å®æåæç»æ§è¡åæ°
+
+				if (status == 'timeout') { //è¶æ¶,statusè¿æsuccess,errorç­å¼çæåµ
+
+					ajax.abort();
+					console.log("è¶æ¶");
+				}
+			}
+		});
+	}
+
+	/*çµç«æ¦åµæ²¡æç¯å¢çæµä»ªæ°æ®*/
+	function plantNoEnv(i) {
+		$("#statsSec" + (i < 10 ? "0" + i : i)).removeClass("stats-bg-green").addClass("stats-bg-gray");
+		$("#statsBad" + (i < 10 ? "0" + i : i)).removeClass("hidden");
+		$("#statsOk" + (i < 10 ? "0" + i : i)).addClass("hidden").parents("#statsSec08,#statsSec09").hide();
+	}
+
+	/*çµç«æ¦åµå¦ææç¯å¢çæµä»ªæ°æ®*/
+	function plantHaveEnv(i) {
+		if ($("#statsSec" + (i < 10 ? "0" + i : i)).hasClass("stats-bg-gray")) {
+			$("#statsSec" + (i < 10 ? "0" + i : i)).removeClass("stats-bg-gray").addClass("stats-bg-green");
+			$("#statsBad" + (i < 10 ? "0" + i : i)).addClass("hidden");
+			$("#statsOk" + (i < 10 ? "0" + i : i)).removeClass("hidden");
+		}
+	}
+	//æ¶æ¯çå­
+	//	function getMsgBoxCount() {
+	//		http_async_request_public("&action=webQueryMsgBoxCount&readed=false", function(err, dat, desc) {
+	//			if(err == 0) {
+	//				$("#msgBtn").attr("title", "ä»æ¥æªè¯»åè­¦æ¶æ¯" + dat.msgCount == undefined ? "0" : dat.msgCount + "æ¡")
+	//				if(dat.msgCount == 0)
+	//					$("#MsgBoxCount").css("background-color", "#5bcc52").text(dat.msgCount == undefined ? "0" : dat.msgCount)
+	//				else
+	//					$("#MsgBoxCount").css("background-color", "red").text(dat.msgCount == undefined ? "0" : dat.msgCount)
+	//			} else if(err == 12) {
+	//				$("#MsgBoxCount").css("background-color", "#5bcc52").text("0")
+	//			}
+	//		})
+	//	}
+	//ç´æ¥æ¥æªå¤çåè­¦æ°
+	function getMsgBoxCount() {
+		http_async_request_public("&action=webQueryPlantsWarning&sdate=" +
+			parseDate2yyyymmdd(new Date()) + " 00:00:00&edate=" + parseDate2yyyymmdd(new Date()) +
+			" 23:59:59&handle=false", function (err, dat, desc) {
+			if (err == 0) {
+				$("#msgBtn").attr("title", "ä»æ¥æªè¯»åè­¦æ¶æ¯" + dat.total == undefined ? "0" : dat.total + "æ¡")
+				if (dat.total == 0)
+					$("#MsgBoxCount").css("background-color", "#5bcc52").text(dat.total == undefined ? "0" : dat.total)
+				else
+					$("#MsgBoxCount").css("background-color", "red").text(dat.total == undefined ? "0" : dat.total)
+			} else if (err == 12) {
+				$("#MsgBoxCount").css("background-color", "#5bcc52").text("0")
+			}
+		})
+	}
+	// æ¢è¡ææ¬
+	function insertLineBreaks(text, interval) {
+		let result = '';
+		for (let i = 0; i < text.length; i += interval) {
+			result += text.slice(i, i + interval) + '<br>';
+		}
+		return result;
+	}
+	function getmsgbody(page, cur) {
+		http_async_request_public(encodeURI("&action=webQueryPlantsWarning&sdate=" +
+			parseDate2yyyymmdd(new Date()) + " 00:00:00&edate=" + parseDate2yyyymmdd(new Date()) +
+			" 23:59:59&i18n=" + getInterLang() + "&handle=false&page=" + page + "&pagesize=8"), function (err, dat, desc) {
+				$("#msgbody").empty()
+				if (err == 0) {
+					var totalPage = (dat.total % 8 == 0 ? dat.total / 8 : Math.ceil(dat.total / 8));
+					$('#pageMsg').paging2({
+						pageNo: page + 1,
+						totalPage: totalPage,
+						callback: function (cur) {
+							getmsgbody(cur - 1, cur)
+						}
+					})
+					for (var i = 0; i < dat.warning.length; ++i) {
+						if (dat.warning[i].level == 0)
+							level = 'åè­¦';
+						if (dat.warning[i].level == 1)
+							level = 'éè¯¯';
+						if (dat.warning[i].level == 2)
+							level = 'æé';
+						$("<tr index='" + i + "'><td>" + dat.warning[i].gts + "</td>" //
+							+
+							"<td>" + insertLineBreaks(dat.warning[i].plant, 13) + "</td>" //
+							+
+							"<td>" + level + "</td>" //
+							+
+							"<td>" + fieldAutoDisp(dat.warning[i].code) + "</td>" //
+							+
+							"<td>" + insertLineBreaks(dat.warning[i].sn, 15) + "</td>" //
+							+
+							"<td >" + dat.warning[i].pn + "</td>" //
+							+
+							"<td>" + insertLineBreaks(dat.warning[i].desc, 15) + "</td>" //
+							+
+							"<td>" + (dat.warning[i].handle ? "å·²å¤ç" : "æªå¤ç") + "</td>" //
+							+
+							"<td>" + fieldAutoDisp(dat.warning[i].cts) + "</td></tr>" // 
+						).appendTo($("#msgbody"))
+					}
+				} else {
+					$("<tr><td colspan='9'>æ æ¶æ¯</td></tr>").appendTo($("#msgbody"))
+				}
+			})
+	}
+</script>

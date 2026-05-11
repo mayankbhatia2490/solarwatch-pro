@@ -1,0 +1,2501 @@
+Shinemonitor Open API 
+1. Help........................................................................................................................................ 3 
+1.1 API usage tips .................................................................................................................. 3 
+1.2 API calls in other GET forms ............................................................................................ 5 
+1.3 Generic error codes ......................................................................................................... 6 
+1.4 Standardized units ........................................................................................................... 8 
+1.5 Multilingual support ........................................................................................................ 8 
+1.6 JAVA language examples ................................................................................................. 9 
+2. Account ................................................................................................................................ 12 
+2.1 Certification ................................................................................................................... 12 
+2.2 update token ................................................................................................................. 13 
+2.3 Register a power station owner account ...................................................................... 13 
+2.4 Check an account information ...................................................................................... 14 
+2.5 Modify password ........................................................................................................... 16 
+2.6 Edit account Information ............................................................................................... 16 
+2.7 Disable/Enable accounts ............................................................................................... 17 
+3. Power station ...................................................................................................................... 18 
+3.1 Create a power station .................................................................................................. 18 
+3.2 Inquiry of power station information: ........................................................................... 20 
+3.3 Query the number of power stations ............................................................................ 22 
+3.4 Inquiry of power station ................................................................................................ 23 
+3.5 Edit Station Information ................................................................................................ 25 
+3.6 Delete power station ..................................................................................................... 27 
+3.7 Query the view of the relationship between the data collector and the equipment ... 28 
+3.8 Query the working status of data collector and equipment under the power station . 29 
+3.9 Query the power generation of the power station on a certain day ............................ 30 
+3.10 Query the power generation of the power station in a certain month ...................... 31 
+3.11Query the daily power generation of the power station in a month ........................... 32 
+3.12 Query the power generation of the power station in a certain year .......................... 33 
+3.13 Query the monthly power generation of the power station in a certain year ........... 34 
+3.14 Query the total power generation of the power station ............................................ 35 
+3.15 Query the annual power generation of the power station ......................................... 36 
+3.16 Query the current output active power of the power station .................................... 37 
+3.17 Query the details of the output active power of the power station on a certain day 38 
+3.18 Query the number of equipment alarms in the power station ................................... 40 
+3.19 Query equipment alarm in power station ................................................................... 41 
+3.20 Query the number of devices in the power station that are alarming ....................... 42 
+4. data collector ....................................................................................................................... 43 
+4.1 Query data collector ...................................................................................................... 43 
+4.2 Query Number of data collectors .................................................................................. 44 
+4.4 Query data collector status ........................................................................................... 44 
+4.16 Add a data collector to the power station .................................................................. 45 
+4.17 Delete a data collector from the power station .......................................................... 46 
+5. General equipment.............................................................................................................. 47 
+5.1 Query device .................................................................................................................. 47 
+5.2 Query device information ............................................................................................. 47 
+5.7 Query the data details of a certain day of equipment .................................................. 48 
+5.14 Query device status ..................................................................................................... 52 
+5.15 Query the number of alarms on the device ................................................................ 54 
+5.17 Delete device ............................................................................................................... 55 
+6. Inverter or other generating equipment ............................................................................. 56 
+6.2 Query the power output of inverter or other power generation equipment in a certain 
+day ....................................................................................................................................... 56 
+6.3 Query the power output of inverter or other power generation equipment in a month
+ ............................................................................................................................................. 57 
+6.4 Query the daily power output of inverter or other power generation equipment in a 
+month .................................................................................................................................. 58 
+ 
+1. Help 
+1.1 API usage tips 
+The Shinemonitor open platform API uses the HTTP protocol. Use the canonical HTTP response 
+code to represent the request results. 
+ 
+All API requests are returned in a canonical, friendly JSON object format. In the case of 
+non-special instructions, the API is called by default using the HTTP-GET method. 
+ 
+API invocation method in GET form 
+1. Authentication interface Calls 
+Before calling any business API, you need to authenticate through the authentication interface. 
+ 
+When calling the authentication interface, you need to provide the USR (account number), pwd 
+(password), company-key (manufacturer identification) assigned by the platform, and a typical 
+call is as follows.  
+Such as test account number (can be used to test interface): 
+usr: vplant 
+ 
+            pwd: vplant 
+ 
+company-key: 0123456789ABCDEF (need to use a company-key assigned by platform) 
+Request: 
+http://api.shinemonitor.com/public/?sign=675bd5418fce7be5e30b920a16a4
+6ce075c90a35&salt=1491967716993&action=auth&usr=vplant&company-key=01
+23456789ABCDEF 
+ 
+* URI Prefix 
+Fixed as: http://api.shinemonitor.com/public/ 
+ 
+* URI Parameters 
+ 
+* sign 
+Signature, calculated as: sign = SHA-1 (salt + SHA-1 (pwd) +  "&action=auth&usr=" + usr +  
+"&company-key=" + company-key); The results after the SHA-1 abstract algorithm are always 
+represented in the form of lowercase 16 binary strings, such as the sign: 
+675bd5418fce7be5e30b920a16a46ce075c90a35 
+ 
+* salt 
+Salt value, participating in signature calculations, a readable string of not less than 8 bytes in 
+length, such as:  "12345678", can use the current system time, such as: new Date ().getTime (), 
+in JavaScript Or System.currentTimeMillis () in the Java language, and so on. 
+ 
+* action 
+The API interface to invoke 
+* usr 
+Account assigned by the platform 
+* company key 
+A manufacturer identification assigned by platform 
+ 
+Response: 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "secret":"ffa1655ee3726840822063a02ac5017795809b18", 
+        "expire":604800, 
+"token":"88d22d819e31897eea2d9d5b9f7792cf4065ac5372aad3672f5e4e
+147cd25b5f", 
+        "role":0 
+    } 
+} 
+ 
+This is an object in JSON format and consists of the following sections: 
+* err 
+Error code, integer form. 
+See Generic error codes 
+ 
+*desc 
+Error code simple description. 
+Such as:  "desc":  "ERR_NONE", Or:  "desc":  "ERR_FORMAT (can not found Devcode) ",  "() 
+" In the content is a more detailed description of the error, it is optional, can be used for hints, 
+such as: alert ( "Can not found devcode. "); 
+See Generic error codes 
+* dat.secret 
+This is a system-assigned secret with a validity period that is used in subsequent business API 
+interface calls. 
+* dat.expire 
+The expiration time of this certification, in seconds, indicates that from now on, after expire 
+seconds, the obtained secret and token (see below) are no longer valid. 
+* dat.token 
+This is a token assigned by the system with a validity period, which represents the identity of the 
+authenticator and is used in subsequent business API interface calls. 
+* dat.role 
+Current account type 
+See account type. 
+1.2 API calls in other GET forms 
+With the exception of the authentication interface, any other get form interface calls the URI that 
+is always similar to the following format: 
+Request: 
+http://api.shinemonitor.com/public/?sign=f0c57c88bdd73a1867355068e9e3
+c49d735ae668&salt=1491967717697&token=88d22d819e31897eea2d9d5b9f7792c
+f4065ac5372aad3672f5e4e147cd25b5f&action=queryCollectorInfo&pn=G09165
+22248153 
+URI are always made up of the following parts: 
+* URI Prefix 
+Fixed as: http://api.shinemonitor.com/public/ 
+* URI Parameters 
+* sign 
+Signature, calculated as follows: sign = SHA-1 (salt + secret + token +  "&action=...");  That is, the 
+salt value (see below) plus the secret and token obtained through the authentication interface, 
+plus  "&action" and all the parameter parts after it, and then calculated by the SHA -1 summary 
+algorithm. 
+* salt 
+Salt value, participating in signature calculations, a readable string of not less than 8 bytes in 
+length, such as:  "12345678", can use the current system time, such as: new Date ().getTime (), 
+in JavaScript Or System.currentTimeMillis () in the Java language, and so on. 
+* token 
+Tokens obtained through the authentication interface. 
+* action 
+The API interface to invoke. 
+* parameter parts 
+The parameter section is optional, depending on whether the action (API) to be invoked requires 
+passing parameters. 
+It is important to note that  "&action" and its parameter parts are always located after sign, slat, 
+token parameters. 
+ 
+The response, similar to the authentication interface, is an object that returns a JSON format, 
+consisting of the following sections: 
+* err 
+Error code, integer form. 
+* desc 
+Error code simple description. 
+* dat 
+The body part of the response, which is optional, depending on the type of API invoked, as 
+follows is a non-dat response: 
+{"err":0,"desc":"ERR_NONE"} 
+1.3 Generic error cod es 
+Err code (HEX) Description Explain 
+0x0000 ERR_NONE Normal, no error 
+0x0001 ERR_FAIL Fail 
+0x0002 ERR_TIMEOUT Overtime 
+0x0003 ERR_SYSTEM_EXCEPTION System abnormality 
+0x0004 ERR_SIGN Unable to verify signature for 
+0x0005 ERR_SALT Wrong salt value, not used 
+according to rules 
+0x0006 ERR_FORMAT_ERROR Parameter format error 
+0x0007 ERR_MISSING_PARAMETER Missing required parameters 
+0x0008 ERR_FORBIDDEN Platform rejection 
+0x0009 ERR_UNSUPPORTED Operation not supported 
+0x000A ERR_NO_AUTH Not certified 
+0x000B ERR_NO_PERMISSION Operation without permission 
+0x000C ERR_NO_RECORD No record 
+0x000D ERR_OVER_LIMITED Out of limit 
+0x000E ERR_DUPLICATE_OPER Repeated actions 
+0x000F ERR_NOT_FOUND_COMPANY_KEY The manufacturer key was not 
+found 
+0x0010 ERR_PASSWORD_VERIF_FAIL Password verification failed 
+0x0011 ERR_PASSWORD_FORMAT_ERROR Wrong password format 
+0x0012 ERR_MOBILE_BINDED Mobile phone number is bound 
+0x0013 ERR_MOBILE_FORMAT Phone number format error 
+0x0014 ERR_EMAIL_FORMAT Email format error 
+0x0015 ERR_USRNAME_FORMAT User name format error 
+0x0016 ERR_COMPANY_NAME_FORMAT Company name format error 
+0x0017 ERR_VCODE_INVALID Invalid manufacturer code 
+0x0018 ERR_USR_NAME_DUPLICATE repeat of user name 
+0x0100 ERR_NOT_FOUND_API The API to call was not found 
+0x0101 ERR_NOT_FOUND_COLLECTOR Data collector not found 
+0x0102 ERR_NOT_FOUND_DEVICE Device not found 
+0x0103 ERR_INVALID_PN Invalid data collector number 
+0x0104 ERR_NOT_FOUND_PLANT Power station not found 
+0x0105 ERR_NOT_FOUND_USR User not found 
+0x0106 ERR_DEVICE_OFFLINE Device offline 
+0x0107 ERR_COLLECTOR_OFFLINE Data collector is offline 
+0x0108 ERR_NOT_FOUND_DEVICE_WARNING Device alarm not found 
+0x0109 ERR_NOT_FOUND_ENVMONITOR Environment detector not found 
+0x010F ERR_NONE_OPERATION There is no modification 
+0x0110 ERR_DUPLICATE_OPER_BIND Duplicate binding 
+0x0120 ERR_NOT_FOUND_CAMERA No cameras found 
+0x0160 ERR_NOT_FOUND_FIREWARE Firmware not found 
+0x0161 ERR_NOT_FOUND_PROTOCOL Agreement not found 
+0x0170 ERR_NOT_FOUND_DEFINEDROLE Role not found 
+0x0171 ERR_NOT_FOUND_USR_GROUP User group not found 
+0x0172 ERR_NOT_FOUND_PLANT_GROUP Station group not found 
+0x0173 ERR_NOT_FOUND_GPRS_TARIFFPACKA
+GE 
+No GPRS recharge plan found 
+0x0174 ERR_NOT_FOUND_RECHARGE_ORDER GPRS traffic recharge order not 
+found 
+0x0180 ERR_NOT_FOUND_SMSCODE SMS verification code not found 
+0x0181 ERR_NOT_FOUND_DEVICE_TOKEN Device not found_ token 
+0x0182 ERR_NOT_FOUND_DEVICE_CFG Device configuration 
+information not found 
+0x0183 ERR_NOT_FOUND_COLLECTOR_TYPE Data collector type not found 
+0x0200 ERR_SMSCODE_DISMATCH SMS verification code does not 
+match 
+0x0201 ERR_SMSCODE_OVERTIME SMS verification code timeout 
+0x0202 ERR_MOBILE_UNBINDED Phone number not bound 
+0x0203 ERR_MOBILE_UNMATCH Phone number mismatch 
+0x0204 ERR_NAME_DUPLICATE The name cannot have the 
+same name 
+0x0205 ERR_COLLECOTR_ISNOT_EMPTY There are data acquisition 
+devices under users or power 
+stations 
+0x0206 ERR_SUBUSR_ISNOT_EMPTY Users also have subordinate 
+users 
+0x0207 ERR_USR_EXISTED User already exists 
+0x0208 ERR_PN_REGISTER Data collector number has been 
+registered 
+0x0209 ERR_COLLECTOR_NOTBELONG_USR The data collector does not 
+belong to the user 
+0x020A ERR_COLLECTOR_EXISTED Data collector already exists 
+0x020B ERR_NOT_PLANTBROWSER Not a browser account 
+0x0300 ERR_PROTOCOL_NOT_OPTION There are no optional fields in 
+the agreement 
+0x0400 ERR_OLNY_SUPPORT_PLANTOWNER Only the owner of the power 
+station supported 
+0x0401 ERR_OLNY_SUPPORT_DIST Only dealers are supported 
+0x0402 ERR_OLNY_SUPPORT_VERDOR Only equipment manufacturers 
+are supported 
+0x0403 ERR_SUPERIOR_DIST_VERDOR Superior users need to be 
+dealers or equipment 
+manufacturers 
+0x0404 ERR_UNSUPPORTED_CHARGE_TYPE Unsupported recharge mode 
+0x0405 ERR_DUPLICATE_PN Duplicate data collector number 
+0x0406 ERR_INVALID_GPRS_CARD Invalid GPRS card 
+0x0407 ERR_USR_NOT_CREATE_ADMIN User not created by 
+administrator 
+0x0700 ERR_COLLECTORS_NOT_ONLY_BELONG
+_DIST 
+All data collectors must belong 
+to the distributor 
+1.4 Standardized units 
+Standardized units agreed by the platform, representation methods, and retention accuracy (real 
+data support required). 
+Description Unit System retention Accuracy 
+Active electricity kWh 0.0001 
+Reactive electricity kVarh 0.0001 
+Active power kW 0.0001 
+Reactive power kVar 0.0001 
+Apparent power kVA 0.0001 
+Grid frequency Hz 0.01 
+Energy Saving and emission 
+reduction (CO2, SO2, etc.) 
+kg 0.001 
+Wind speed M/S 0.1 
+Wind direction ° 1 
+Temperature °C 0.1 
+Irradiation intensity kW/M2 0.0001 
+Voltage V 0.1 
+Current A 0.1 
+Longitude ° 0.000001 
+Latitude ° 0.000001 
+1.5 Multilingual support 
+Some interfaces return data that provides multilingual support, such as querying the device's 
+most recent data. 
+The languages supported by the system are as follows: 
+Description Shorthand 
+English en_US 
+Chinese zh_CN 
+Swedish (partially supported) sv_SE 
+Portuguese-Brazil (partially supported) pt_BR 
+Spanish-Brazil (partially supported) es_ES 
+1.6 JAVA language exampl es 
+import java.io.ByteArrayOutputStream; 
+import java.io.PrintStream; 
+import java.security.Key; 
+import java.security.MessageDigest; 
+ 
+import javax.crypto.Cipher; 
+import javax.crypto.spec.SecretKeySpec; 
+public class ShineMonitorOpenApi 
+{ 
+    /** shinemonitor Open platform API access address. */ 
+    private static String OPEN_API_URI = 
+"http://api.shinemonitor.com/public/"; 
+ 
+    public static final void main(String[] args) 
+    { 
+        ShineMonitorOpenApi.reg(); 
+        ShineMonitorOpenApi.auth(); 
+        ShineMonitorOpenApi.authPassed(); 
+    } 
+/** Authentication interface. */ 
+    private static final void auth() 
+    { 
+        String usr = "vplant"; /* account, password, manufacturer 
+identification. */ 
+        String pwd = "vplant"; 
+        String companyKey = "0123456789ABCDEF"; 
+        String salt = System.currentTimeMillis() + ""; /* salt. */ 
+        String sha1Pwd = 
+ShineMonitorOpenApi.sha1ToLowerCase(pwd.getBytes()); /* SHA-1(pwd). */ 
+        String action = "&action=auth&usr=" + usr /* Attention: Chinese 
+need URLEncoder.encode. */ + "&company-key=" + companyKey; 
+        String sign = ShineMonitorOpenApi.sha1ToLowerCase((salt + sha1Pwd 
++ action).getBytes()); /* SHA-1(slat + SHA-1(pwd) + action). */ 
+        String request = ShineMonitorOpenApi.OPEN_API_URI + "?sign=" + 
+sign + "&salt=" + salt + action; 
+        System.out.println(request); 
+    } 
+/** register an account interface. */ 
+    private static final void reg() 
+    { 
+        String usr = "plant-user-01"; 
+        String pwd = "plant-user-01"; 
+        String mobile = "15889700000"; 
+        String email = "eybond@eybon.com"; 
+        String pn = "0123456789ABCD"; 
+        String sn = pn; 
+        String companyKey = "0123456789ABCDEF"; 
+        String salt = System.currentTimeMillis() + ""; /* salt. */ 
+        String pwdSha1 
+=ShineMonitorOpenApi.sha1ToLowerCase(pwd.getBytes()); /* SHA-1(PWD). 
+*/ 
+        String pnSha1 = 
+ShineMonitorOpenApi.sha1ToLowerCase(pn.getBytes()); /* SHA-1(PN). */ 
+        byte[] rc4 = ShineMonitorOpenApi.rc4enc(pnSha1.getBytes(), 
+pwdSha1.getBytes(), 0, pwdSha1.getBytes().length); /* RC4(SHA-1(PN), 
+SHA-1(PWD)). */ 
+        String action = "&action=reg&usr=" + usr /* Attention: Chinese need 
+URLEncoder.encode. */ + "&pwd=" + ShineMonitorOpenApi.byte2HexStr(rc4, 
+0, rc4.length).toLowerCase(); 
+        action += "&mobile=" + mobile + "&email=" + email + "&sn=" + sn 
++ "&company-key=" + companyKey; 
+        String sign = ShineMonitorOpenApi.sha1ToLowerCase((salt + pwdSha1 
++ action).getBytes()); 
+        String request = ShineMonitorOpenApi.OPEN_API_URI + "?sign=" + 
+sign + "&salt=" + salt + action; 
+        System.out.println(request); 
+    } 
+ 
+    /** Business API Interface After certification is passed. */ 
+    private static final void authPassed() 
+    { 
+        String secret = "ffa1655ee3726840822063a02ac5017795809b18"; /* 
+certification is passed secret 与 token. */ 
+        String token = 
+"88d22d819e31897eea2d9d5b9f7792cf4065ac5372aad3672f5e4e147cd25b5f"; 
+        String salt = System.currentTimeMillis() + ""; /* salt. */ 
+        String action = "&action=queryCollectorInfo&pn=G0916522248153"; 
+        String sign = ShineMonitorOpenApi.sha1ToLowerCase((salt + secret 
++ token + action).getBytes()); /* SHA-1(slat + secret + token + action). 
+*/ 
+        String request = ShineMonitorOpenApi.OPEN_API_URI + "?sign=" + 
+sign + "&salt=" + salt + "&token=" + token + action; 
+        System.out.println(request); 
+    } 
+ 
+    /** Change byte flow to hexadecimal string (compact format, no spaces). 
+*/ 
+    private static final String byte2HexStr(byte by[], int ofst, int len) 
+    { 
+        if (len < 1) 
+            return ""; 
+        ByteArrayOutputStream bos = new ByteArrayOutputStream(); 
+        PrintStream ps = new PrintStream(bos); 
+        for (int i = ofst; i < ofst + len; i++) 
+            ps.printf("%02X", by[i]); 
+        return bos.toString(); 
+    } 
+ 
+    /** SHA-1 Abstract algorithm. */ 
+    private static final String sha1ToLowerCase(byte[] by) 
+    { 
+        try 
+        { 
+            byte dat[] = MessageDigest.getInstance("SHA-1").digest(by); 
+            return ShineMonitorOpenApi.byte2HexStr(dat, 0, 
+dat.length).toLowerCase(); 
+        } catch (Exception e) 
+        { 
+            e.printStackTrace(); 
+            return null; 
+        } 
+    } 
+ 
+    /** RC4 encryption. */ 
+    public static final byte[] rc4enc(byte key[], byte[] org, int ofst, 
+int len) 
+    { 
+        try 
+        { 
+            Key k = new SecretKeySpec(key, "RC4"); 
+            Cipher cip = Cipher.getInstance("RC4"); 
+            cip.init(Cipher.ENCRYPT_MODE, k); 
+            return cip.doFinal(org, ofst, len); 
+        } catch (Exception e) 
+        { 
+            e.printStackTrace(); 
+            return null; 
+        } 
+    } 
+} 
+ 
+2. Account 
+Account type (HEX) Description 
+0x0000 Power station owners 
+0x0001 Manager account 
+0x0002 Distributor account 
+0x0005 Power plant viewer  
+ 
+2.1 Certification 
+Before calling the business API, it is always necessary to obtain the secret and token assigned by 
+the platform through authentication first. 
+For example, request 
+http://api.shinemonitor.com/public/?sign=675bd5418fce7be5e30b920a16a4
+6ce075c90a35&salt=1491967716993&action=auth&usr=vplant&company-key=01
+23456789ABCDEF 
+Parameter Description Required selection 
+action auth yes 
+usr account assigned by 
+platform 
+yes 
+company-key manufacturer 
+identification 
+yes 
+ 
+The specific usage of the interface is shown in the authentication interface call.(check 1.1) 
+Errors that may occur: 
+Return error code Description 
+0x0007 ERR_MISSING_PARAMETER 
+0x000F ERR_NOT_FOUND_COMPANY_KEY 
+0x0010 ERR_PASSWORD_VERIF_FAIL 
+0x0105 ERR_NOT_FOUND_USR 
+ 
+2.2 update token 
+After logging in (successful authentication), you will get a token with a certain validity period 
+through which you can regain one before it expires. You can avoid the login process. 
+For example, request 
+http://api.shinemonitor.com/public/?sign=84cfa496a0fe6d7840dd2133e9fa
+9e12d25a487d&salt=1509429799415&token=f88b49ab6876b49957ba744b6beb4d4
+b017a9d9cf6a78a14ca1ef4aab568c093&action=updateToken 
+Parameter Description Required selection 
+action updateToken yes 
+Response: With the authentication interface, see Authentication interface call.(check 1.1) 
+2.3 Register a power station owner account 
+The registered power station owner account needs to provide an unregistered PN number as a 
+parameter. 
+For example, request  
+ 
+http://api.shinemonitor.com/public/?sign=4f12e771c0aa22898b77b58397e1
+4e77f86b7d78&salt=1496932696821&action=reg&usr=plant-user-01&pwd=59c7
+043a9db2fbffaa6456df73d624d73fa638296760ecceb163db392e937f6931c23b3b8
+ec76971&mobile=15889700000&email=eybond@eybond.com&sn=W001750X50&comp
+any-key=0123456789ABCDEF 
+Parameter Description Required selection 
+action reg yes 
+usr The name of the account 
+to register 
+yes 
+pwd Password, encrypted by 
+RC4 (SHA-1 (PN), SHA-1 
+(PWD)) 
+yes 
+email email no 
+mobile mobile no 
+sn RTU PN number yes 
+company-key Manufacturer 
+identification 
+assigned by platform 
+yes 
+ 
+Response: With the authentication interface, see Authentication interface call. 
+If you have questions about the code implementation of RC4 (PN), SHA-1 (PWD), refer to the Java 
+language example. 
+Errors that may occur: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x0007 ERR_MISSING_PARAMETER Missing required parameter 
+(incoming parameter may be 
+empty) 
+0x000F ERR_NOT_FOUND_COMPANY
+_KEY 
+The manufacturer key was not 
+found 
+0x0103 ERR_INVALID_PN Invalid data collector number 
+0x0207 ERR_USR_EXISTED User already exists 
+0x0208 ERR_PN_REGISTER The PN was registered by 
+someone 
+2.4 Check an account information 
+Refers to the information that queries the current login account 
+For example, request 
+http://api.shinemonitor.com/public/?sign=45a0317337cad1b975b7cc8e6ae3
+5401daa5c356&salt=6799118618252297881&token=5b13e18eaa179d4bdce4cf2cc
+0e66eaa506c7f27ccac6b9e7beaa190ec0e386f&action=queryAccountInfo&uid=1 
+Parameter Description Required selection 
+action queryAccountInfo yes 
+uid User ID, which refers 
+to the ID of a 
+sub-account under the 
+current account, and if 
+this parameter is not 
+passed, it means that 
+the information for the 
+current login account 
+is queried 
+no 
+ 
+Respond 
+Parameter description Required  
+uid User ID yes 
+usr  
+ 
+User name 
+yes 
+role User type yes 
+mobile Mobile no 
+email Email no 
+qname Nick name no 
+photo Photo no 
+cname Company name no 
+caddr Company address no 
+ctel Company phone number no 
+qq QQ no 
+wx Wechat no 
+bomb Does the WeChat binding 
+account play the box, false? 
+Bullet box: Do not play box 
+no 
+enable Account status, True? Normal: 
+Freezing 
+yes 
+gts Account registration time, 
+format: Yyyy-mm-dd hh:mi:ss, 
+0 time zone 
+yes 
+desc Description no 
+vendor Valid only if the account type 
+is the device manufacturer 
+(manager account) 
+no 
+dist Valid only if the account type 
+is a distributor 
+no 
+lastAtuhTs Last login time, format: 
+Yyyy-mm-dd hh:mi:ss, 0 time 
+zone 
+no 
+lastAtuhAddr Last login IP address such as 
+“192.168.1.8” 
+no 
+ 
+ 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "uid":1, 
+        "usr":"aaa", 
+        "role":0, 
+        "mobile":"15889000000", 
+        "email":"a@a.com", 
+        "qname":"aaab", 
+        "enable":true, 
+        "gts":"2017-06-26 00:00:00" 
+    } 
+Errors that may occur: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x000B ERR_NO_PERMISSION No permission (the current account 
+may not have permission to view the 
+account) 
+0x0105 ERR_NOT_FOUND_USR User not found 
+2.5 Modify password 
+Modifying the password occurs after the authentication is passed. 
+For example, request 
+http://api.shinemonitor.com/public/?sign=4f12e771c0aa22898b77b58397e1
+4e77f86b7d78&salt=1496932696821&action=updatePassword&newpwd=0f190442
+736593b6cbaba23e599c6d6f838e42cdfdace002a2f4d94baff5d82439a3f5c39d75e
+ba2 
+Parameter Description  Required  
+action updatePassword yes 
+newpwd Password, encrypted by 
+RC4 (SHA-1 (OLDPWD), 
+SHA-1 (NEWPWD)) 
+yes 
+Response: No body paragraph 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE" 
+} 
+Errors that may occur: 
+Return error code Description  Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x0007 ERR_MISSING_PARAMETER Missing required parameter (incoming 
+parameter may be empty) 
+0x0010 ERR_PASSWORD_VERIF_FAIL Password verification failed (possible 
+password encryption error) 
+0x0011 ERR_PASSWORD_FORMAT_E
+RROR 
+Incorrect password format 
+2.6 Edit account Information 
+Editing account information occurs after the certification is passed. 
+For example, request 
+http://api.shinemonitor.com/public/?sign=4f12e771c0aa22898b77b58397e1
+4e77f86b7d78&salt=1496932696821&action=editAccount&email=a@a.com 
+Parameter Description  Required  
+action editAccount yes 
+email Email no 
+mobile Mobile no 
+qname Nick name no 
+photo Phone no 
+cname Company name no 
+caddr Company address no 
+ctel Company phone number no 
+qq QQ no 
+wx Wechat no 
+bomb WeChat binding account whether the 
+frame, false: Bullet box, true: Do 
+not play the box 
+no 
+When all optional parameters are not passed, it means that you do not have to modify them, and 
+passing a null value means that the parameter is set to NULL, such as:  "&cname=", and the 
+company name can be set to null. 
+Response: No body paragraph 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE" 
+} 
+Errors that may occur: 
+Return error code Description Detailed description 
+0x0001 ERR_FAIL Failed (possible cause update 
+failed) 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+2.7 Disabl e/Enabl e accounts 
+For example, request 
+http://api.shinemonitor.com/public/?sign=4f12e771c0aa22898b77b58397e1
+4e77f86b7d78&salt=1496932696821&action=disableOrEnableAccount&enable=
+true&uid=1,2,3 
+Parameter Description Required 
+action disableOrEnableAccount yes 
+uid User IDs in groups, 
+multiple separated by  
+", " numbers 
+yes 
+enable True? Enable: Disable yes 
+Response: No body paragraph 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE" 
+} 
+ Errors that may occur: 
+Return error code Description Detailed description 
+0x000B ERR_NO_PERMISSION No permission (the possible reason is 
+that the account does not have 
+permission for the user) 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x0105 ERR_NOT_FOUND_USR User not found 
+Special instructions for error codes and description information: 
+Because the user returns the 0x000B error code when the account is 
+enabled/disabled in bulk, the return contains an error message in a 
+special format (as follows), where the DemoUsr in parentheses after 
+ERR_NO_PERMISSION refers to the first user name of the current unlicensed 
+operation, without permissions for the following reasons: 
+ 
+ 
+1. If the operator is a manufacturer(manager account): The account number 
+is not a subordinate of the manufacturer and there are several data loggers 
+under the account that do not belong to the manufacturer 
+2. If the operator is a Distributor: The account number is not a 
+subordinate of the distributor and there are several receivers under the 
+account that do not belong to the Distributor. 
+{ 
+    "err":11, 
+    "desc":"ERR_NO_PERMISSION(DemoUsr)" 
+} 
+3. Power station 
+3.1 Create a power station 
+For example, request  
+http://api.shinemonitor.com/public/?sign=7f220b6f 21d0b52d0452d9c66ffe1f4f84635b81
+&salt=2337424845041575962&token=91a6c87e89acbfb2fa482f3b02ee071ee58ea0293
+dd92f243a88ee51415f497f&action=addPlant& ... 
+ 
+Parameter Description Required  
+action Add plant yes 
+name Plant name yes 
+address.country country no 
+address.province province no 
+address.city city no 
+address.county country no 
+address.town town no 
+address.village village no 
+address.address Address, detailed address no 
+address.lon Lon,standardized unit no 
+address.lat Lat,standardized unit no 
+address.timezone time zone (seconds), e.g. East 8: 28800. Once the 
+time zone is specified, it can not be changed 
+yes 
+profit.unit Profit Yield per kWh no 
+profit.currency Currency symbol no 
+profit.currency Country ISO currency symbol (country) no 
+profit.coal Standard coal saved per kWh, standardized unit no 
+profit.co2 Carbon dioxide emission reduction per kilowatt 
+hour of power generation, standardized unit 
+no 
+profit.so2 Emission reduction per kWh, standardized unit no 
+Nominal Power Power station design power, standardized unit no 
+Energy Year Estimate Annual planned power generation of power 
+station, standardized unit 
+no 
+Design Company Power plant designer no 
+Pic Big Power station picture, large picture, see picture 
+upload 
+no 
+Pic Small Power station picture, small picture, see picture 
+upload 
+no 
+install Installation date of power station, format: yyyy 
+MM DD HH: Mi: SS, power station time zone 
+yes 
+ 
+Response: no text 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE" 
+} 
+ 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x000B ERR_NO_PERMISSION No authority (possible reason: 
+the interface can only be called 
+by the owner of power station) 
+0x000E ERR_DUPLICATE_OPER Repeated operation (same 
+station name is not allowed 
+under the same user) 
+ 
+3.2 Inquiry of power station information: 
+For example, request  
+http://api.shinemonitor.com/public/?sign=45a0317337cad1b975b7cc8e6ae35401daa5c3
+56&salt=6799118618252297881&token=5b13e18eaa179d4bdce4cf2cc0e66eaa50 6c7f2
+7ccac6b9e7beaa190ec0e386f&action=queryPlantInfo&plantid=1  
+ 
+Parameter Description Required selection 
+action queryPlantInfo yes 
+plantid Power station ID yes 
+ 
+Response: 
+Parameter Description Required  
+pid Power station ID yes 
+uid Power station user ID yes 
+name Power station name yes 
+status Station status yes 
+address.country Station address, country no 
+address.province Station address, province no 
+address.city Station address, city no 
+address.county Station address, county no 
+address.town Station address, town no 
+address.village Station address, village no 
+address.address Station address, detailed address no 
+address.lon Station address, longitude, 
+standardized unit 
+no 
+address.lat Station address, latitude, 
+standardized unit 
+no 
+address.timezone Address of power station, time zone 
+(SEC), Rudong 8: 28800 
+yes 
+profit.unitProfit Power station revenue, yield per kWh no 
+profit.currency Power station revenue, currency 
+symbol 
+no 
+profit.currencyCountr
+y 
+Station revenue, ISO currency symbol 
+(country) 
+no 
+profit.coal Power station revenue, saving 
+standard coal per kilowatt hour, 
+standardized unit 
+no 
+profit.co2 Power station revenue, CO2 emission 
+reduction per kWh, standardized unit 
+no 
+profit.so2 Power station revenue, SO2 emission 
+reduction per kWh, standardized unit 
+no 
+nominalPower Power station design power, no 
+standardized unit 
+energyYearEstimate Annual planned power generation of 
+power station, standardized unit 
+no 
+designCompany Power plant designer no 
+picBig Picture of power station，large 
+picture 
+ 
+no 
+picSmall Picture of power station, small 
+picture 
+no 
+install Installation date of power station, 
+format: yyyy MM DD HH: Mi: SS, power 
+station time zone 
+yes 
+gts The date generated by the power 
+station on the platform, format: yyyy 
+MM DD HH: Mi: SS, power station time 
+zone 
+yes 
+ 
+The possible station states are as follows: 
+ 
+States value(HEX) Description 
+PLANT_STATUS_ONLINE 0x00 Normal 
+PLANT_STATUS_OFFLINE 0x01 Offline 
+PLANT_STATUS_WARNING 0x04 Warning 
+PLANT_STATUS_ATTENTION 0x07 Attention 
+ 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "pid":1, 
+        "uid":1, 
+        "name":"PLANT", 
+        "status":0, 
+        "address":{ 
+            "country":"China", 
+            "province":"Hunan province", 
+            "city":"Yiyang city", 
+            "county":"Anhua county", 
+            "town":"Meicheng twon", 
+            "village":"Nanjie village", 
+            "address":"Nanjie village No.8", 
+            "lon":"111.651442", 
+            "lat":"28.144826", 
+            "timezone":28800 
+        }, 
+        "profit":{ 
+            "unitProfit":"1.12", 
+            "currency":"￥", 
+            "currencyCountry":"CNY", 
+            "coal":"0.221", 
+            "co2":"0.031", 
+            "so2":"0.023" 
+        }, 
+        "nominalPower":"50000", 
+        "energyYearEstimate":"5000000", 
+        "designCompany":"EYBOND", 
+        "picBig":"http://img.shinemonitor.com/picBig.png", 
+        "picSmall":"http://img.shinemonitor.com/picSmall.png", 
+        "install":"2017-06-29 02:09:18", 
+        "gts":"2017-06-29 02:09:18" 
+    } 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x0104 ERR_NOT_FOUND_PLANT Power station not found 
+0x000B ERR_NO_PERMISSION No permission (the user 
+does not have the 
+operation authority to 
+the power station) 
+ 
+3.3 Query the number of power stations 
+For example, request 
+http://api.shinemonitor.com/public/?sign=45a0317337cad1b975b7cc8e6ae35401daa5c3
+56&salt=6799118618252297881&token=5b13e18eaa179d4bdce4cf2cc0e66eaa506c7 f2
+7ccac6b9e7beaa190ec0e386f&action=queryPlantCount&status=0  
+ 
+Parameter Description Required  
+action queryPlantCount yes 
+status Station status, if this 
+parameter is not passed, 
+it means no concern 
+no 
+ 
+Response: 
+Paramater Description  Required  
+count Number of power stations yes 
+ 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "count":8 
+    } 
+} 
+ 
+ 
+Possible errors: 
+Return error code Description  Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x0104 ERR_NOT_FOUND_PLANT Power station not found 
+0x000B ERR_NO_PERMISSION No permission (the user does not 
+have the operation authority to 
+the power station) 
+0x0008 ERR_FORBIDDEN Reject (admin account can use, 
+other roles refuse) 
+ 
+ 
+3.4 Inquiry of power station 
+For example, request  
+ http://api.shinemonitor.com/public/?sign=45a0317337cad1b975b7cc8e6ae35401daa5c35
+6&salt=6799118618252297881&token=5b13e18eaa179d4bdce4cf2cc0e66eaa506c7f27cc
+ac6b9e7beaa190ec0e386f&action=queryPlants&status=0& orderBy=ascPlantName&page=
+0&pagesize=10  
+ 
+parameter Description  Required  
+action queryPlants yes 
+status Station status, if this parameter is not 
+passed, it means no concern 
+no 
+orderBy Sorting rules. The possible values are: 
+Ascplantname, in order of plant name 
+Descplantname, in reverse order of station 
+name 
+Ascinstall, according to the installation 
+time sequence of power station 
+no 
+ 
+Descinstall, in reverse order of installation 
+time of power station 
+Ascstatus, in order of station status 
+Descstatus, in reverse order of station status 
+If this parameter is not passed, it will 
+default to ascplantname 
+plantName Power station name, fuzzy search no 
+page Pagination processing, page number, starting 
+from 0. If this parameter is not passed, it 
+will be 0 by default 
+no 
+pagesize Pagination processing, the number of records 
+per page, 1 ~ 50. If this parameter is not 
+passed, it will be 1 by default 
+no 
+ 
+Response: 
+Parameter Description Required  
+total Total number of records yes 
+page Paging processing, page number yes 
+pagesize Paging processing, number of records 
+per page 
+yes 
+plant[x] Seek inquiry station information yes 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "total":8, 
+        "page":0, 
+        "pagesize":1, 
+        "plant":[ 
+            { 
+                "pid":1, 
+                "uid":1, 
+                "name":"PLANT", 
+                "status":1, 
+                "address":{ 
+                    "country":"China", 
+                    "province":"Hunan Province", 
+                    "city":"Yiyang city", 
+                    "county":"Anhua county", 
+                    "town":"Meicheng town", 
+                    "village":"Nanjie village", 
+                    "address":"Nanjie village no.8", 
+                    "lon":"111.651442", 
+                    "lat":"28.144826", 
+                    "timezone":28800 
+                }, 
+                "profit":{ 
+                    "unitProfit":"1.12", 
+                    "currency":"￥", 
+                    "currencyCountry":"CNY", 
+                    "coal":"0.221", 
+                    "co2":"0.031", 
+                    "so2":"0.023" 
+                }, 
+                "nominalPower":"50000", 
+                "energyYearEstimate":"5000000", 
+                "designCompany":"EYBOND", 
+                "picBig":"http://img.shinemonitor.com/picBig.png", 
+                
+"picSmall":"http://img.shinemonitor.com/picSmall.png", 
+                "install":"2017-06-29 02:16:21", 
+                "gts":"2017-06-29 02:16:21" 
+            } 
+        ] 
+    } 
+} 
+ 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x0104 ERR_NOT_FOUND_PLANT Power station not found 
+0x0008 ERR_FORBIDDEN Reject (called admin account, 
+Other roles are rejected) 
+ 
+3.5 Edit Station Information 
+For example, request  
+ http://api.shinemonitor.com/public/?sign=45a0317337cad1b975b7cc8e6ae35401daa5c35
+6&salt=6799118618252297881&token=5b13e18eaa179d4bdce4cf2cc0e66eaa506c7f27cc
+ac6b9e7beaa190ec0e386f&action=editPlant&plantid=1&name=PLANT 00 
+ 
+Parameter Description Required  
+action editPlant yes 
+plantid  yes 
+name Power station name no 
+status Station status yes 
+address.country Station address, country no 
+address.province Station address, province no 
+address.city Station address, city no 
+address.county Station address, county no 
+address.town Station address, town no 
+address.village Station address, village no 
+address.address Station address, detailed address no 
+address.lon Station address, longitude, 
+standardized unit 
+no 
+address.lat Station address, latitude, 
+standardized unit 
+no 
+address.timezone Address of power station, time zone 
+(SEC), Rudong 8: 28800 
+yes 
+profit.unitProfit Power station revenue, yield per kWh no 
+profit.currency Power station revenue, currency 
+symbol 
+no 
+profit.currencyCountr
+y 
+Station revenue, ISO currency symbol 
+(country) 
+no 
+profit.coal Power station revenue, saving 
+standard coal per kilowatt hour, 
+standardized unit 
+no 
+profit.co2 Power station revenue, CO2 emission 
+reduction per kWh, standardized unit 
+no 
+profit.so2 Power station revenue, SO2 emission 
+reduction per kWh, standardized unit 
+no 
+nominalPower Power station design power, 
+standardized unit 
+no 
+energyYearEstimate Annual planned power generation of 
+power station, standardized unit 
+no 
+designCompany Power plant designer no 
+picBig Picture of power station，large 
+picture 
+ 
+no 
+picSmall Picture of power station, small 
+picture 
+no 
+install Installation date of power station, 
+format: yyyy MM DD HH: Mi: SS, power 
+station time zone 
+yes 
+ 
+If all the optional parameters are not passed, it means that it is not 
+necessary to modify them. Passing a null value means that the parameter 
+is set to null, such as "& CNAME =", the company name can be set to null. 
+ 
+Response: no text 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE" 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0001 ERR_FAIL Failed (update failed) 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x0104 ERR_NOT_FOUND_PLANT Power station not found 
+0x0008 ERR_FORBIDDEN Reject  
+0x000B ERR_NO_PERMISSION No permission (the user does not 
+have the operation authority to 
+the power station) 
+0x010F ERR_NONE_OPERATION There is no modification 
+ 
+3.6 Del ete power station 
+It is not allowed to delete any data collector or equipment in the power station. 
+For example, request  
+ http://api.shinemonitor.com/public/?sign=7f220b6f21d0b52d0452d9c66ffe1f4f84635b81&s
+alt=2337424845041575962&token=91a6c87e89acbfb2fa482f3b02ee071ee58ea0293dd92f
+243a88ee51415f497f&action=delPlant&plantid=1  
+Parameter Description Required selection 
+action delPlant yes 
+plantid Plant ID yes 
+ 
+Response: no text 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE" 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x000B ERR_NO_PERMISSION No authority (the user has 
+no operation authority or 
+role to the power station, 
+and can only be the owner 
+of the power station) 
+0x0205 ERR_COLLECOTR_ISNOT_EMPTY The data collector still 
+exists in the owner or 
+under the power station 
+0x0104 ERR_NOT_FOUND_PLANT Power station not found 
+ 
+ 
+3.7 Query the view of the relationship between the data 
+coll ector and the equipment 
+For example,request:   
+http://api.shinemonitor.com/public/?sign=45a0317337cad1b975b7cc8e6ae35401daa5c356
+&salt=67991186182 52297881&token=5b13e18eaa179d4bdce4cf2cc0e66eaa506c7f27cca
+c6b9e7beaa190plantactionPlantView&ec0386e  
+ 
+parameter description required 
+action queryPlantDeviceView yes 
+plantid Power station id yes 
+ 
+response: 
+parameter description required 
+collector[x].pn PN of data collector  yes 
+collector[x].alias Data logger alias no 
+collector[x].device[y].devcode Equipment protocol code no 
+collector[x].device[y].devaddr Device address (485 bus) no 
+collector[x].device[y].sn Equipment serial number no 
+collector[x].device[y].alias Equipment alias no 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "collector":[ 
+            { 
+                "pn":"COLLECTOR0000", 
+                "device":[ 
+                    { 
+                        "devcode":512, 
+                        "devaddr":1,  
+                        "sn":"0123456789"  
+                    } 
+                ] 
+            } 
+        ] 
+    } 
+} 
+ 
+Possible errors: 
+Return error code description required 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x000B ERR_NO_PERMISSION No permission (the user does 
+not have the operation 
+authority to the power 
+station) 
+0x0101 ERR_NOT_FOUND_COLLECTOR Data collector not found 
+0x0101 ERR_NOT_FOUND_DEVICE Device not found 
+0x0104 ERR_NOT_FOUND_PLANT Power station not found 
+ 
+3.8 Q uery the working status of data coll ector and 
+equipment und er the power station 
+For example,request:   
+ http://api.shinemonitor.com/public/?sign=45a0317337cad1b975b7cc8e6ae35401daa5
+c356&salt=6799118618252297881&token=5b13e18eaa179d 4bdce4cf2cc0e66eaa506
+c7f27ccac6b9e7beaa190ec0e386f&action=queryPlantDeviceStatus&plantid=1  
+ 
+Parameter Description Required 
+action queryPlantDeviceStatus yes 
+plantid Power station id yes 
+ 
+response: 
+Parameter Description Required 
+status Station status yes 
+collector[x].pn Data collector number yes 
+collector[x].alias Data collector alias no 
+collector[x].status Data collector status, see equipment 
+status 
+yes 
+collector[x].device[y].devcode Equipment protocol code yes 
+collector[x].device[y].devaddr Device address (485 bus) yes 
+collector[x].device[y].sn Equipment serial number yes 
+collector[x].device[y].alias Device aliases no 
+collector[x].device[y].status Equipment status yes 
+ 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "status":0, 
+        "collector":[ 
+            { 
+                "pn":"COLLECTOR0000",                 
+                "status":0, 
+                "device":[ 
+                    { 
+                        "devcode":512, 
+                        "devaddr":1, 
+                        "sn":"0123456789", 
+                        "status":0 
+                    } 
+                ] 
+            } 
+        ] 
+    } 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x000B ERR_NO_PERMISSION No permission (the user does not have the 
+operation authority to the power station) 
+0x0101 ERR_NOT_FOUND_COLLECTOR Data collector not found 
+0x0101 ERR_NOT_FOUND_DEVICE Device not found 
+0x0104 ERR_NOT_FOUND_PLANT 
+ 
+Power station not found 
+ 
+3.9 Query the power generation of the power station on a 
+certain day 
+For example,request:  
+ http://api.shinemonitor.com/public/?sign=45a0317337cad1b975b7cc8e6ae35401daa5c35
+6&salt=6799118618252297881&token=5b13e18eaa179 d4bdce4cf2cc0e66eaa506c7f27cc
+ac6b9e7beaa190ec0e386f&action=queryPlantEnergyDay&plantid=1&date=2017 -06-22 
+ 
+Parameter Description Required 
+action queryPlantEnergyDay yes 
+plantid Power station ID yes 
+date 
+ 
+The date to be queried in the format of yyyy mm DD. the date is 
+considered to be the time zone where the power station is located. If 
+this parameter is not passed, it will be set as today by default 
+no 
+ 
+response: 
+Parameter Description Required 
+energy Generating capacity, standardized unit yes 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "energy":"10.0001" 
+    } 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x000B ERR_NO_PERMISSION No permission (the user does not have the operation authority to 
+the power station) 
+0x0104 ERR_NOT_FOUND_PLANT Power station not found 
+0x000C ERR_NO_RECORD No record (no data can be found or no data is generated in the day) 
+ 
+3.10 Query the power generation of the power station in 
+a certain month 
+For example,request:  
+ http://api.shinemonitor.com/public/?sign=45a0317337cad1b975b7cc8e6ae35401daa5c356&salt=67
+99118618252297881&token=5b13e18eaa179d4bdce4cf2cc0e66eaa506c7f27ccac6b9e7beaa190ec
+0e386f&action=queryPla ntEnergyMonth&plantid=1&date=2017 -06 
+ 
+Parameter Description Required 
+action queryPlantEnergyMonth yes 
+plantid Power station ID yes 
+date The date to be queried, format: yyyy mm. The 
+date is considered to be the time zone where the 
+power station is located. If this parameter is not 
+passed, it will be the current month by default 
+no 
+ 
+response: 
+Parameter Description Required 
+energy Generating capacity, standardized unit yes 
+ 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "energy":"10.0001" 
+    } 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x000B ERR_NO_PERMISSION No permission (the user does not have the 
+operation authority to the power station) 
+0x0101 ERR_NOT_FOUND_DEVICE Device not found 
+0x0104 ERR_NOT_FOUND_PLANT Power station not found 
+0x000C ERR_NO_RECORD No record (no data can be found or no data is 
+generated in the day) 
+ 
+3.11Query the daily power generation of the power 
+station in a month 
+For example,request:  
+http://api.shinemonitor.com/public/?sign=45a0317337cad1b975b7cc8e6ae35401daa5c356&salt=679
+9118618252297881&token=5b13e18eaa179d4bdce4cf2cc0e66eaa506c7f27ccac6b9e7beaa190ec0
+e386f&action=queryPlantEnergyMonthPerDay&plant id=1&date=2017 -06 
+ 
+Parameter Description Required 
+action queryPlantEnergyMonthPerDay yes 
+plantid Power station ID yes 
+date The date to be queried, format: yyyy mm. The date is considered 
+to be the time zone where the power station is located. If this 
+no 
+parameter is not passed, it will be the current month by default 
+ 
+response: 
+The interface always returns the amount of electricity generated each day of the month, or 0 if 
+that day has not yet arrived. 
+Parameter Description Required 
+perday[x].val A standardized unit of power generation for a day in a month yes 
+perday[x].ts A day in a month in the format of yyyy MM DD HH: Mi: SS, where 
+the HH: Mi: SS part is meaningless 
+yes 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "perday":[ 
+            { 
+                "val":"0.00", 
+                "ts":"2017-06-01 00:00:00" 
+            }, 
+            { 
+                "val":"0.01", 
+                "ts":"2017-06-02 00:00:00" 
+            } 
+        ] 
+    } 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x000B ERR_NO_PERMISSION No permission (the user does not have the 
+operation authority to the power station) 
+0x0104 ERR_NOT_FOUND_PLANT Power station not found 
+ 
+3.12 Query the power genera tion of the power station in 
+a certain year 
+For example,request:  
+http://api.shinemonitor.com/public/?sign=45a0317337cad1b975b7cc8e6ae35401daa5c356&salt=679
+9118618252297881&token=5b13e18eaa179d4bdce4cf2cc0e66eaa506c7f27ccac 6b9e7beaa190ec0
+e386f&action=queryPlantEnergyYear&plantid=1&date=2017  
+ 
+Parameter Description Required 
+action queryPlantEnergyYear yes 
+plantid Power station ID yes 
+date The date to be queried, format: yyyy. The date is considered to 
+be the time zone where the power station is located. If this 
+parameter is not passed, it will be the year by default 
+no 
+ 
+ 
+response: 
+Parameter Description Required 
+energy Generating capacity, standardized unit yes 
+ 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "energy":"10.0001" 
+    } 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x000B ERR_NO_PERMISSION No permission (the user does not have the 
+operation authority to the power station) 
+0x0104 ERR_NOT_FOUND_PLANT Power station not found 
+0x000C ERR_NO_RECORD No record (no data can be found or no data is 
+generated in the day) 
+ 
+3.13 Query the monthly power generation of the power 
+station in a certain year 
+For example,request:  
+ http://api.shinemonitor.com/public/?sign=45a0317337cad1b975b7cc8e6ae35401daa5c356&salt=67
+99118618252297881&token=5b13e18eaa179d4bdce4cf2cc0e66eaa506c7f27ccac6b9e7beaa190ec
+0e386f&action=queryPlantEnergyYearPerMonth&plantid=1&date=2017  
+ 
+Parameter Description Required 
+action queryPlantEnergyYearPerMonth yes 
+plantid Power station ID yes 
+date The date to be queried, format: yyyy. The date is 
+considered to be the time zone where the power 
+station is located. If this parameter is not passed, 
+it will be the year by default 
+no 
+ 
+response: 
+The interface always returns the generation of each month of the year, or 0 if the month hasn't 
+arrived. 
+Parameter Description Required 
+permonth[x].val A standardized unit of power generation for a day in a month yes 
+perday[x].ts The month of a year in the format of yyyy MM DD HH: Mi: SS, 
+where DD is always the first day of the month, and the HH: Mi: 
+SS part is meaningless 
+yes 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "permonth":[ 
+            { 
+                "val":"0.00", 
+                "ts":"2017-01-01 00:00:00" 
+            }, 
+            { 
+                "val":"0.01", 
+                "ts":"2017-02-01 00:00:00" 
+            } 
+        ] 
+    } 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x000B ERR_NO_PERMISSION No permission (the user does not have the 
+operation authority to the power station) 
+0x0104 ERR_NOT_FOUND_PLANT Power station not found 
+ 
+3.14 Query the total power  generation of the power 
+station 
+For example,request:  
+ http://api.shinemonitor.com/public/?sign=45a0317337cad1b975b7cc8e6ae35401daa5c356&salt=67
+99118618252297881&token=5b13e18eaa179d4bdce4cf2cc0e66eaa506c7f27ccac6b9e7beaa190ec
+0e386f&action=queryPlantEnergyTotal&plantid=1  
+ 
+Parameter Description Required 
+action queryPlantEnergyTotal yes 
+plantid Power station ID yes 
+ 
+response: 
+Parameter Description Required 
+energy Generating capacity, standardized unit yes 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "energy":"10.0001" 
+    } 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x000B ERR_NO_PERMISSION 
+ 
+No permission (the user does not have the 
+operation authority to the power station) 
+0x0104 ERR_NOT_FOUND_PLANT 
+ 
+Power station not found 
+ 
+3.15 Query the annual power generation of the power 
+station 
+For example,request:  
+http://api.shinemonitor.com/public/?sign=45a0317337cad1b97 5b7cc8e6ae35401daa5c356&salt=679
+9118618252297881&token=5b13e18eaa179d4bdce4cf2cc0e66eaa506c7f27ccac6b9e7beaa190ec0
+e386f&action=queryPlantEnergyTotalPerYear&plantid=1  
+ 
+Parameter Description Required 
+action queryPlantEnergyTotalPerYear yes 
+plantid Power station ID yes 
+ 
+response: 
+Parameter Description Required 
+peryear[x].val Power generation in a year, standardized unit of power 
+generation 
+yes 
+peryear[x].ts For a certain year, the format is: yyyy MM DD HH: Mi: SS, where 
+MM DD is always January 1 of the year, and the HH: Mi: SS part is 
+meaningless 
+yes 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "peryear":[ 
+            { 
+                "val":"0.00", 
+                "ts":"2016-01-01 00:00:00" 
+            }, 
+            { 
+                "val":"0.01", 
+                "ts":"2017-01-01 00:00:00" 
+            } 
+        ] 
+    } 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x000B ERR_NO_PERMISSION 
+ 
+No permission (the user does not have the 
+operation authority to the power station) 
+0x0104 ERR_NOT_FOUND_PLANT 
+ 
+Power station not found 
+ 
+3.16 Query the current output active power of the power 
+station 
+For example,request:  
+ http://api.shinemonitor.co m/public/?sign=45a0317337cad1b975b7cc8e6ae35401daa5c356&salt=67
+99118618252297881&token=5b13e18eaa179d4bdce4cf2cc0e66eaa506c7f27ccac6b9e7beaa190ec
+0e386f&action=queryPlantActiveOuputPowerCurrent&plantid=1  
+ 
+Parameter Description Required 
+action queryPlantActiveOuputPowerCurrent yes 
+plantid Power station ID yes 
+ 
+response: 
+Parameter Description Required 
+outputPower Output active power, standardized unit yes 
+ 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "outputPower":"5000.0001" 
+    } 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x000B ERR_NO_PERMISSION 
+ 
+No permission (the user does not have the 
+operation authority to the power station) 
+0x0104 ERR_NOT_FOUND_PLANT 
+ 
+Power station not found 
+0x000C ERR_NO_RECORD No record (no data can be found or no data is 
+generated in the day) 
+ 
+ 
+3.17 Query the d etails of the output active power of the 
+power station on a certain day 
+For example,request:  
+http://api.shinemonitor.com/public/?sign=45a0317337cad1b975b7cc8e6ae35401daa5c356&salt=679
+9118618252297881&token=5b13e18eaa179d4bdce4cf2cc0e66eaa506c7f27ccac6b9e7beaa190ec0
+e386f&action=queryPlantActiveOuputPowerOneDay&plantid=1&date=2017 -06-22 
+ 
+Parameter Description Required 
+action queryPlantActiveOuputPowerOneDay yes 
+plantid Power station ID yes 
+date The date to be queried in the format of yyyy 
+mm DD. the date is considered to be the time 
+zone where the power station is located. If 
+this parameter is not passed, it will be set as 
+no 
+today by default. 
+ 
+response: 
+The sampling frequency of the output active power of the power station is 5 minutes: the last output 
+active power value of all generating equipment in a 5-minute interval is taken and summarized. 
+Parameter Description Required 
+peryear[x].val Output active power, standardized unit yes 
+peryear[x].ts The sampling time of the output active 
+power (time zone of the power station), 
+in the format of yyyy MM DD HH: Mi: SS 
+yes 
+ 
+*The output power array is arranged by TS from small to large, that is, the earliest data comes 
+first. 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "outputPower":[ 
+            { 
+                "val":"29.0001", 
+                "ts":"2016-12-31 06:10:10" 
+            }, 
+            { 
+                "val":"30.0001", 
+                "ts":"2016-12-31 06:15:10" 
+            } 
+        ] 
+    } 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x000B ERR_NO_PERMISSION 
+ 
+No permission (the user does not have the 
+operation authority to the power station) 
+0x0104 ERR_NOT_FOUND_PLANT 
+ 
+Power station not found 
+0x000C ERR_NO_RECORD No record (no data can be found or no data is 
+generated in the day) 
+ 
+3.18 Quer y the number of equipment alarms in the 
+power station 
+For example,request:  
+http://api.shinemonitor.com/public/?sign=7f220b6f21d0b52d0452d9c66ffe1f4f84635b81&salt=23374
+24845041575962&token=91a6c87e89acbfb2fa482f3b02ee071ee58ea0293dd92f243a88ee51415f49
+7f&action=queryPlantWarningCount&plantid=1&level=0&handle=false  
+ 
+Parameter Description Required 
+action queryPlantActiveOuputPowerOneDay yes 
+plantid Power station ID yes 
+devtype Equipment type no 
+level Alarm level, if this parameter is not passed, it means that you do not care no 
+handle Processed, true? Processed: not handled. If this parameter is not passed, 
+it means that you don't care 
+no 
+sdate Start time (power station time zone), format: yyyy MM DD HH: Mi: SS, if 
+this parameter is not passed, it means that you do not care 
+no 
+edate Cut off time (power station time zone), format: yyyy MM DD HH: Mi: SS, if 
+this parameter is not passed, it means you don't care, sdate and edate 
+must exist at the same time, and the semi open interval is used for query, 
+that is, sdate < = date < edate 
+no 
+ 
+response: 
+Parameter Description Required 
+count Number of alarms yes 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+       "count": 0 
+    } 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x000B ERR_NO_PERMISSION 
+ 
+No permission (the user does not have the 
+operation authority to the power station) 
+0x0104 ERR_NOT_FOUND_PLANT 
+ 
+Power station not found 
+ 
+3.19 Query equipment alarm in power station 
+For example,r equest: 
+http://api.shinemonitor.com/public/?sign=7f220b6f21d0b52d0452d9c66ffe1f4f84635b81&salt=23374
+24845041575962&token=91a6c87e89acbfb2fa482f3b02ee071ee58ea0293dd92f243a88ee51415f49
+7f&action=queryPlantWarning&plantid=1&level=0&handle=true&i18n=zh_CN&page =0&pagesize=1  
+ 
+Parameter Description Required 
+action queryPlantActiveOuputPowerOneDay yes 
+plantid Power station ID yes 
+devtype Equipment type no 
+search Data collector number, equipment serial number, fuzzy search  
+level Alarm level, if this parameter is not passed, it means that you do not care no 
+handle Processed, true? Processed: not handled. If this parameter is not passed, 
+it means that you don't care 
+no 
+sdate Start time (power station time zone), format: yyyy MM DD HH: Mi: SS, if 
+this parameter is not passed, it means that you do not care 
+no 
+edate Cut off time (power station time zone), format: yyyy MM DD HH: Mi: SS, if 
+this parameter is not passed, it means you don't care, sdate and edate 
+must exist at the same time, and the semi open interval is used for query, 
+that is, sdate < = date < edate 
+no 
+i18n International language, see multilingual support yes 
+page Pagination processing, page number, starting from 0. If this parameter is 
+not passed, it will be 0 by default 
+no 
+pagesize Paging processing, the number of alarms per page, 1 ~ 50. If this 
+parameter is not passed, it will be 1 by default 
+no 
+ 
+response: 
+Parameter Description Required 
+total Total number of alarms yes 
+page  Paging processing, page number yes 
+pagesize Paging processing, number of alarms per page yes 
+warning[x] Check the alarm on the query device yes 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "total":8, 
+        "page":0, 
+        "pagesize":1, 
+        "warning":[ 
+            { 
+                ... 
+            } 
+        ] 
+    } 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x000B ERR_NO_PERMISSION 
+ 
+No permission (the user does not have the 
+operation authority to the power station) 
+0x0104 ERR_NOT_FOUND_PLANT 
+ 
+Power station not found 
+0x0108 ERR_NOT_FOUND_DEVICE_WARNING Device alarm not found 
+ 
+3.20 Query the number of d evices in the power station 
+that are alarming 
+For example,request:  
+ http://api.shinemonit or.com/public/?sign=7f220b6f21d0b52d0452d9c66ffe1f4f84635b81&salt=23374
+24845041575962&token=91a6c87e89acbfb2fa482f3b02ee071ee58ea0293dd92f243a88ee51415f49
+7f&action=queryPlantWarningDeviceCount&plantid=1&level=0  
+ 
+Parameter Description Required 
+action queryPlantWarningDeviceCount yes 
+plantid Power station ID yes 
+devtype Equipment type no 
+level Alarm level, if this parameter is not passed, it means that you do not care no 
+ 
+response: 
+Parameter Description Required 
+count Number of devices in alarm yes 
+ 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+       "count": 0 
+    } 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x000B ERR_NO_PERMISSION 
+ 
+No permission (the user does not have the 
+operation authority to the power station) 
+0x0104 ERR_NOT_FOUND_PLANT 
+ 
+Power station not found 
+ 
+4. data collector 
+4.1 Query data coll ector 
+For example,request:  
+ http://api.shinemonitor.com/public/?sign=7f220b6f21d0b52d0452d9c66ffe1f4f84 635b81&salt=23374
+24845041575962&token=91a6c87e89acbfb2fa482f3b02ee071ee58ea0293dd92f243a88ee51415f49
+7f&action=queryCollectors&status=1  
+ 
+Parameter Description Required 
+action queryCollectors yes 
+status Data collector status, see equipment status. If this parameter is not 
+passed, it means that you do not care 
+no 
+page Pagination processing, page number, starting from 0. If this parameter is 
+not passed, it will be 0 by default 
+no 
+pagesize Pagination processing, the number of records per page, 1 ~ 50. If this 
+parameter is not passed, it will be 1 by default 
+no 
+ 
+response: 
+Parameter Description Required 
+total Total number of records no 
+page Paging processing, page number no 
+pagesize Paging processing, number of records per page no 
+collector[x] Check query data collector information no 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0101 ERR_NOT_FOUND_COLLECTOR Data collector not found 
+0x0104 ERR_NOT_FOUND_PLANT Power station not found 
+ 
+ 
+4.2 Query Number of data coll ectors 
+For example,request:  
+http://api.shinemonitor.com/public/?sign=7f220b6f21d0b52d0452d9c66ffe1f4f84635b81&salt=23374
+24845041575962&token=91a6c87e89acbfb2fa482f3b02ee071ee58ea0293dd92f243a88ee51415f49
+7f&action=queryCollectorCount&status=1  
+ 
+Parameter Description Required 
+action queryCollectorCount yes 
+status Data collector status, check equipment status. If this parameter is not 
+passed, it means that you do not care 
+no 
+ 
+response: 
+Parameter Description Required 
+count Number of data collector yes 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "count":8 
+    } 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0104 ERR_NOT_FOUND_PLANT Power station not found 
+ 
+4.4 Query data coll ector status 
+For example,request:  
+ http://api.shinemonitor.com/public/?sign=7f220b6f21d0b52d0452d9c66ffe1f4f84635b81&salt=23374
+24845041575962&token=91a6c87e89acbfb2fa482f3b02ee071ee58ea0293dd92f243a88ee51415f49
+7f&action=queryCollectorStatus&pn=COLLECTOR0001,COLLECTOR 0002 
+ 
+Parameter Description Required 
+action queryCollectorStatus yes 
+pn The number of data collector is separated by ',', and the maximum 
+number of data acquisition devices is 256 at a time 
+yes 
+ 
+response: 
+Parameter Description Required 
+collector[x].pn pn of data collector yes 
+collector[x].status Data collector status, see equipment status yes 
+ 
+It should be noted that the interface fails quickly: that is, if a data collector number is considered 
+wrong, the interface will immediately return an error. 
+In addition, the order of data collectors returned may be different from that passed during query 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "collector":[ 
+            { 
+                "pn":"COLLECTOR0001", 
+                "status":1 
+            }, 
+            { 
+                "pn":"COLLECTOR0002", 
+                "status":1 
+            } 
+        ] 
+    } 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x0007 ERR_MISSING_PARAMETER Missing required parameter (incoming parameter 
+may be empty) 
+0x000D ERR_OVER_LIMIT Out of limit 
+0x0101 ERR_NOT_FOUND_COLLECTOR 
+ 
+Data collector not found 
+ 
+..... 
+4.16 Ad d a data coll ector to the power station 
+For example,request:  
+http://api.shinemonitor.com/public/?sign=261007b9b49e6bb853674f707bbe07342090e16c&salt=477
+4753303431526569&token=1fa0b3a0872b7257aa7908e16d316f7149e515d41c8e23092eb83987d6c
+f2774&action=addCollectorToPlant&pn=COLLECTOR0001&alias =COLLECTOR0001  
+ 
+Parameter Description Required 
+action addCollectorToPlant yes 
+plantid Power station ID yes 
+pn Pn of data collector yes 
+alias Alias name of data collector no 
+ 
+response: no text 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x000B ERR_NO_PERMISSION No permission (Only the owner of the power station can add it) 
+0x0104 ERR_NOT_FOUND_PLANT Power station not found 
+0x020A ERR_COLLECTOR_EXISTED Data collector already exists 
+ 
+4.17 Del ete a data coll ector from the power station 
+For example,request:  
+ http://api.shinemonitor.com/public/?sign=4f12e771c0aa22898b77b58397e14e77f86b7d78&salt=149
+6932696821&action=delCollectorFromPlant&pn=H1617401142442  
+ 
+Parameter Description Required 
+action delCollectorFromPlant yes 
+pn Pn of the data collector yes 
+ 
+response: no text 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE" 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0101 ERR_NOT_FOUND_COLLECTOR Data collector not found 
+0x0400 ERR_OLNY_SUPPORT_PLANTOWNER Only power station owner supported 
+ 
+5. General equipment 
+5.1 Query d evice 
+For example,request:  
+ http://api.shinemonitor.com/public/?sign=7f220b6f21d0b52d0452d9c66ffe1f4f84635b81&salt=23374
+24845041575962&token=91a6c87e89acbfb2fa482f3b02ee071ee58 ea0293dd92f243a88ee51415f49
+7f&action=queryDevices&status=1&devtype=0  
+ 
+Parameter Description Required 
+action queryDevices yes 
+plantid Power station ID no 
+status Equipment status, see device status. If this parameter is not passed, it 
+means that you do not care 
+no 
+devtype Device type, see device type. If you do not pass this parameter, it means 
+you don't care 
+no 
+pn Pn of data collector, fuzzy search, no 
+alias Device alias or serial number, fuzzy search no 
+page Pagination processing, page number, starting from 0. If this parameter is 
+not passed, it will be 0 by default 
+no 
+pagesize Pagination processing, the number of records per page, 1 ~ 50. If this 
+parameter is not passed, it will be 1 by default 
+no 
+ 
+response: 
+Parameter Description Required 
+total Total number of records yes 
+page Paging processing, page number yes 
+pagesize Paging processing, number of records per page yes 
+device[x] Check query device information yes 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0102 ERR_NOT_FOUND_DEVICE Device not found 
+0x0104 ERR_NOT_FOUND_PLANT Power station not found 
+ 
+5.2 Query d evice information 
+For example,request:  
+http://api.shinemonitor.com/public/?sign=7f220b6f21d0b52d0452d9c66ffe1f4f84635b81&salt=23374
+24845041575962&token=91a6c87e89acbfb2fa482f3b02ee071ee58ea0293dd92f243a88ee51415f49
+7f&action=queryDeviceCount&status=1  
+ 
+Parameter Description Required 
+action queryDeviceCount yes 
+plantid Power station ID no 
+status Equipment status, see device status. If this parameter is not passed, it 
+means that you do not care 
+no 
+devtype Device type, see device type. If you do not pass this parameter, it means 
+you don't care 
+no 
+ 
+ 
+response: 
+Parameter Description Required 
+count Number of the device yes 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "count":8 
+    } 
+} 
+ 
+ 
+ 
+5.7 Query the data d etails of a certain day of equipment 
+For example,request:  
+ http://api.shinemon itor.com/public/?sign=45a0317337cad1b975b7cc8e6ae35401daa5c356&salt=67
+99118618252297881&token=5b13e18eaa179d4bdce4cf2cc0e66eaa506c7f27ccac6b9e7beaa190ec
+0e386f&action=queryDeviceDataOneDay&i18n=zh_CN&pn=J1817101731142&devcode=752&devad
+dr=1&sn=687484400018&d ate=2017-04-05 
+ 
+Parameter Description Required 
+action queryDeviceDataOneDay yes 
+i18n International language, check multilingual support yes 
+pn Pn of data collector yes 
+devcode Equipment protocol code yes 
+devaddr Device address (485 bus) yes 
+sn Equipment serial number yes 
+date The date to be queried in the format of yyyy mm DD. the date is 
+considered to be the time zone where the device is located. If this 
+no 
+parameter is not passed, it will be set as today by default 
+ 
+response: 
+Parameter Description Required 
+title[x].title The name of the device protocol field yes 
+title[x].unit The unit of equipment protocol field. Some fields have units, such 
+as the unit of power output of inverter, while others may not have 
+units, such as serial number 
+no 
+row[x].filed[y]
+  
+The value of the device protocol field, title.size () is always equal to 
+row [x] filed.size (), they are one-to-one 
+yes 
+ 
+In particular, row [x]. Filed [0] and row [x]. Filed [1] always indicate the unique identification of 
+the current data row and the time stamp when the data occurs (the time zone where the device 
+is located). The timestamp format is yyyy MM DD HH: Mi: SS 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "title":[ 
+            { 
+                "title":"id" 
+            }, 
+            { 
+                "title":"time stamp" 
+            }, 
+            { 
+                "title":"serial number" 
+            }, 
+            { 
+                "title":"PV1 input voltage", 
+                "unit":"V" 
+            }, 
+            { 
+                "title":"PV2 input voltage", 
+                "unit":"V" 
+            }, 
+            { 
+                "title":"PV3 input voltage", 
+                "unit":"V" 
+            }, 
+            { 
+                "title":"PV1 Input current", 
+                "unit":"A" 
+            }, 
+            { 
+                "title":"PV2 Input current", 
+                "unit":"A" 
+            }, 
+            { 
+                "title":"PV3 Input current", 
+                "unit":"A" 
+            }, 
+            { 
+                "title":"PV1 Input power", 
+                "unit":"W" 
+            }, 
+            { 
+                "title":"PV2Input power", 
+                "unit":"W" 
+            }, 
+            { 
+                "title":"PV3 Input power", 
+                "unit":"W" 
+            }, 
+            { 
+                "title":"R phase grid voltage", 
+                "unit":"V" 
+            }, 
+            { 
+                "title":"S phase grid voltage", 
+                "unit":"V" 
+            }, 
+            { 
+                "title":"T phase grid voltage", 
+                "unit":"V" 
+            }, 
+            { 
+                "title":"Grid connected power", 
+                "unit":"W" 
+            }, 
+            { 
+                "title":"Radiator temperature", 
+                "unit":"°C" 
+            }, 
+            { 
+                "title":"Module temperature", 
+                "unit":"°C" 
+            }, 
+            { 
+                "title":"Inverter operation mode" 
+            }, 
+            { 
+                "title":"Running time", 
+                "unit":"Hour" 
+            }, 
+            { 
+                "title":"Generation time", 
+                "unit":"Hour" 
+            }, 
+            { 
+                "title":"Times of grid connection" 
+            }, 
+            { 
+                "title":"Total power generation", 
+                "unit":"kWh" 
+            }, 
+            { 
+                "title":"Peak power after start up", 
+                "unit":"W" 
+            }, 
+            { 
+                "title":"Peak power of the day", 
+                "unit":"W" 
+            } 
+        ], 
+        "row":[ 
+            { 
+                "field":[ 
+                    "bcaa940319ac11e7bde91c6f6593e938", 
+                    "2017-04-05 11:06:40", 
+                    "687484400018", 
+                    "608.4", 
+                    "582.9", 
+                    "9.8", 
+                    "1.76", 
+                    "1.56", 
+                    "0.07", 
+                    "1071", 
+                    "914", 
+                    "0", 
+                    "233.1", 
+                    "240.3", 
+                    "225.5", 
+                    "1977", 
+                    "29.6", 
+                    "37.4", 
+                    "normal", 
+                    "120", 
+                    "116", 
+                    "000067", 
+                    "336", 
+                    "8668", 
+                    "3995" 
+                ] 
+            }, 
+            Object{...}, 
+            Object{...}, 
+            Object{...} 
+        ] 
+    } 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x000C ERR_NO_RECORD No record (the device has no data) 
+0x0102 ERR_NOT_FOUND_DEVICE Device not found 
+ 
+5.14 Query d evice status 
+The possible states of the equipment are as follows:  
+state Value (HEX) Description  
+DEVICE_STATUS_ONLINE  0x00 Online, normal operation  
+DEVICE_STATUS_OFFLINE  0x01 Offline, it may be that the data collector 
+attached to the device is offline, or the 
+device itself is offline (the data collector 
+cannot obtain data from the device)  
+DEVICE_STATUS_FAULT 0x02 Fault, the device has a fault level alarm 
+or some registers or fields indicate that 
+the device is running in the fault state  
+DEVICE_STATUS_STANDBY 0x03 Standby, some registers or fields 
+indicate that the device i s running in 
+standby mode  
+DEVICE_STATUS_WARNING  0x04 Alarm: the device has a warning level 
+alarm or some registers or fields indicate 
+that the device is running in the alarm 
+state 
+DEVICE_STATUS_ERROR  0x05 Error, the device has an error level 
+alarm or some registers or fields indicate 
+that the device is running in an error 
+state 
+DEVICE_STATUS_PROTOCOL_ERROR  0x06 Protocol error, the message collected by 
+data collector from the device does not 
+conform to the protocol  
+ 
+For example,request:  
+http://api.shinemonitor.com/public/?sign=7f220b6f21d0b52d0452d9c66ffe1f4f84635b81&salt=23374
+24845041575962&token=91a6c87e89acbfb2fa482f3b02ee071ee58ea0293dd92f243a88ee51415f49
+7f&action=quer yDeviceStatus&device=COLLECTOR0001,512,1,687489900018;COLLECTOR0002,5
+12,2,687489900019  
+ 
+Parameter Description Required 
+action queryDeviceStatus yes 
+device Data collector number, device protocol code, device address (485 
+bus), device serial number (PN, devcode, devaddr, Sn), multiple 
+separated by ";" number, with a maximum of 256 
+yes 
+ 
+response: 
+Parameter Description Required 
+device[x].pn Pn of data collector yes 
+device[x].devcode Equipment protocol code yes 
+device[x].devaddr Device address (485 bus) yes 
+device[x].sn Equipment serial number yes 
+device[x].status Equipment status yes 
+It should be noted that interfaces fail quickly: that is, if a device message is considered to be 
+malformed, the interface will immediately return an error . 
+In addition, the returned device order may be different from the order passed in the query. 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "device":[ 
+            { 
+                "pn":"COLLECTOR0001", 
+                "devcode":512, 
+                "devaddr":1, 
+                "sn":"687489900018", 
+                "status":1 
+            }, 
+            { 
+                "pn":"COLLECTOR0002", 
+                "devcode":512, 
+                "devaddr":2, 
+                "sn":"687489900019", 
+                "status":0 
+            } 
+        ] 
+    } 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x0007 ERR_MISSING_PARAMETER Missing required parameters 
+0x000D ERR_OVER_LIMIT Out of limit 
+0x000C ERR_NO_RECORD No record (the device has no data) 
+0x0102 ERR_NOT_FOUND_DEVICE Device not found 
+ 
+5.15 Query the number of alarms on the d evice 
+The possible alarm levels of the equipment are as follows: 
+state Value  Description  
+DEVICE_WARNING_LEVEL_WARNING  0x00 warning 
+DEVICE_WARNING_LEVEL_ERROR  0x01 error 
+DEVICE_WARNING_LEVEL_FAULT  0x02 fault 
+DEVICE_WARNING_LEVEL_OFFLINE  0x03 offline 
+* Distinguish from alarm severity: device_ WARNING_ LEVEL_ WARNING < DEVICE_ WARNING_ 
+LEVEL_ ERROR < DEVICE_ WARNING_ LEVEL_ FAULT. 
+ 
+For example,request:  
+ http://api.shinemonitor.com/public/?sign=7f220b6f21d0b52d0452d9c66ffe1f4f84635b81&salt=23374
+24845041575962&token=91a6c87e89acbfb2fa482f3b0 2ee071ee58ea0293dd92f243a88ee51415f49
+7f&action=queryDeviceWarningCount&pn=COLLECTOR0001&devcode=512&devaddr=1&sn=68748
+9900018&level=0&handle=true  
+ 
+Parameter Description Required 
+action queryDeviceWarningCount yes 
+pn Pn of data collector yes 
+devcode Equipment protocol code yes 
+devaddr Device address (485 bus) yes 
+sn Equipment serial number yes 
+level Alarm level, if this parameter is not passed, it means that you do not care no 
+handle Processed, true? Processed: not handled. If this parameter is not passed, it 
+means that you don't care 
+no 
+sdate Start time (device time zone), format: yyyy MM DD HH: Mi: SS. If this 
+parameter is not passed, it means not care 
+no 
+edate Deadline (device time zone), format: yyyy MM DD HH: Mi: SS, if this 
+parameter is not passed, it means that you don't care, sdate and edate must 
+exist at the same time, and the semi open interval is used for query, that is, 
+sdate < = date < edate 
+no 
+ 
+response: 
+Parameter Description Required 
+count Number of unprocessed alarms yes 
+ 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+       "count": 0 
+    } 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x0007 ERR_MISSING_PARAMETER Missing required parameters 
+0x0102 ERR_NOT_FOUND_DEVICE Device not found 
+0x0108 ERR_NOT_FOUND_DEVICE_WARNING Device alarm not found 
+ 
+5.17 Del ete d evice 
+ 
+For example,request:  
+http://api.shinemonitor.com/public/?sign=7f220b6f21d0b52d045 2d9c66ffe1f4f84635b81&salt=23374
+24845041575962&token=91a6c87e89acbfb2fa482f3b02ee071ee58ea0293dd92f243a88ee51415f49
+7f&action=delDeviceFromPlant&pn=COLLECTOR0001&devcode=512&devaddr=1&sn=6874899000
+18 
+ 
+Parameter Description Required 
+action delDeviceFromPlant yes 
+pn Pn of data collector yes 
+devcode Equipment protocol code yes 
+devaddr Device address (485 bus) yes 
+sn Equipment serial number yes 
+ 
+response: no text 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE" 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x000B ERR_NO_PERMISSION No permission 
+0x0102 ERR_NOT_FOUND_DEVICE Device not found 
+ 
+6. Inverter or other generating equipment 
+6.2 Query the power output of inverter or other power 
+generation equipment in a certain day 
+For example,request:  
+http://api.shinemonitor.com/public/?sign=45a0317337cad1b975b7cc8e6ae35401daa5c356&salt=679
+9118618252297881&token=5b13e18eaa179d 4bdce4cf2cc0e66eaa506c7f27ccac6b9e7beaa190ec0
+e386f&action=queryDeviceEnergyDay&pn=COLLECTOR0001&devcode=752&devaddr=1&sn=6874
+84400018&date=2017 -04-05 
+ 
+Parameter Description Required 
+action queryDeviceEnergyDay yes 
+pn Pn of data collector yes 
+devcode Equipment protocol code yes 
+devaddr Device address (485 bus) yes 
+sn Equipment serial number yes 
+date The date to be queried in the format of yyyy mm DD. the date is considered 
+to be the time zone where the device is located. If this parameter is not 
+no 
+passed, it will be set as today by default 
+ 
+response: 
+Parameter Description Required 
+energy Generating capacity, standardized unit yes 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "energy":"10.0001" 
+    } 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x000C ERR_NO_RECORD No record (no data reported by equipment found) 
+0x0102 ERR_NOT_FOUND_DEVICE Device not found 
+ 
+6.3 Query the power output of inverter or other power 
+generation equipment in a month 
+For example,request:  
+http://api.shinemonitor.com/public/?sign=45a0317337cad1b975b7cc8e6ae35401daa5c356&salt=679
+9118618252297881&token=5b13e18eaa179d 4bdce4cf2cc0e66eaa506c7f27ccac6b9e7beaa190ec0
+e386f&action=queryDeviceEnergyMonth&pn=COLLECTOR0001&devcode=752&devaddr=1&sn=687
+484400018&date=2017 -04 
+ 
+Parameter Description Required 
+action queryDeviceEnergyMonth yes 
+pn Pn of data collector yes 
+devcode Equipment protocol code yes 
+devaddr Device address (485 bus) yes 
+sn Equipment serial number yes 
+date Date to query, format: yyyy mm, date is considered to be the time zone 
+where the device is located 
+yes 
+ 
+response: 
+Parameter Description Required 
+energy Generating capacity, standardized unit yes 
+ 
+ 
+ 
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "energy":"10.0001" 
+    } 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x000C ERR_NO_RECORD No record (no data reported by equipment found) 
+0x0102 ERR_NOT_FOUND_DEVICE Device not found 
+ 
+6.4 Query the daily power output of inverter or other 
+power generation equipment in a month 
+For example,request:  
+ http://api.shinemonitor.com/public/?sign=45a0317337cad1b975b7cc8e6ae35401daa5c356&salt=67
+99118618252297881&token=5b13e18eaa179d4bdce4cf2cc0e66eaa506c7f27ccac6b9e7beaa190ec
+0e386f&action=queryDeviceEnergyMonthPerDay&pn=COLLECTOR0001&devcode=752&devaddr=1
+&sn=687484400018&date=2017 -06 
+ 
+Parameter Description Required 
+action queryDeviceEnergyMonthPerDay yes 
+pn Pn of data collector yes 
+devcode Equipment protocol code yes 
+devaddr Device address (485 bus) yes 
+sn Equipment serial number yes 
+date The date to be queried, format: yyyy mm. The date is considered to be the 
+time zone where the device is located. If this parameter is not passed, it will 
+be the current month by default 
+no 
+ 
+Response: 
+* The interface always returns the amount of electricity generated each day of the month, or 0. 0 
+if that day has not yet arrived 
+Parameter Description Required 
+perday[x].val   
+perday[x].ts   
+ 
+{ 
+    "err":0, 
+    "desc":"ERR_NONE", 
+    "dat":{ 
+        "perday":[ 
+            { 
+                "val":"0.00", 
+                "ts":"2017-06-01 00:00:00" 
+            }, 
+            { 
+                "val":"0.01", 
+                "ts":"2017-06-02 00:00:00" 
+            } 
+        ] 
+    } 
+} 
+ 
+Possible errors: 
+Return error code Description Detailed description 
+0x0006 ERR_FORMAT_ERROR Parameter error 
+0x000C ERR_NO_RECORD No record (no data reported by equipment found) 
+0x0102 ERR_NOT_FOUND_DEVICE Device not found 
+ 
+ 

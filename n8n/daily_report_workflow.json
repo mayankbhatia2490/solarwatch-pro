@@ -1,0 +1,111 @@
+{
+  "name": "Daily Solar Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 20 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://influxdb:8086/api/v2/query?org=solar",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Token my-super-secret-auth-token-replace-me"
+            },
+            {
+              "name": "Content-type",
+              "value": "application/vnd.flux"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "from(bucket: \"solar_metrics\") |> range(start: -1d) |> filter(fn: (r) => r[\"_measurement\"] == \"solar_metrics\") |> filter(fn: (r) => r[\"_field\"] == \"daily_energy_kwh\") |> last()"
+            }
+          ]
+        }
+      },
+      "name": "Query InfluxDB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        450,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "InfluxDB_Token",
+          "name": "InfluxDB Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "solar@example.com",
+        "toEmail": "admin@example.com",
+        "subject": "Daily Solar Report",
+        "html": "=<p>Here is your daily solar report:</p><p>{{ $json.data }}</p>"
+      },
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        650,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Query InfluxDB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query InfluxDB": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "df16ebfc-9029-45e0-b6f4-c247d4e5f7a0"
+}
