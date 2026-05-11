@@ -1,0 +1,185 @@
+@import "tailwindcss";
+
+/* ── Theme CSS Variables ───────────────────────────────────────────────────── */
+:root {
+  /* Light mode */
+  --bg-base:       #f1f5f9;
+  --bg-surface:    #ffffff;
+  --bg-surface-2:  #f8fafc;
+  --bg-border:     #e2e8f0;
+  --bg-hover:      #f1f5f9;
+
+  --text-primary:   #0f172a;
+  --text-secondary: #334155;
+  --text-muted:     #64748b;
+
+  --sidebar-bg:     #ffffff;
+  --sidebar-border: #e2e8f0;
+  --sidebar-active: rgba(16, 185, 129, 0.10);
+
+  --scroll-track:   #f1f5f9;
+  --scroll-thumb:   #cbd5e1;
+
+  --skeleton-from:  #e2e8f0;
+  --skeleton-to:    #f1f5f9;
+  --glass-bg:       rgba(255,255,255,0.80);
+  --glass-border:   rgba(15, 23, 42, 0.10);
+
+  /* Card content text overrides — light mode explicit */
+  --card-title:     #0f172a;
+  --card-value:     #0f172a;
+  --card-label:     #475569;
+  --card-sub:       #64748b;
+
+  /* Status colours — same both modes */
+  --color-generating: #22c55e;
+  --color-warning:    #f59e0b;
+  --color-critical:   #ef4444;
+  --color-info:       #3b82f6;
+  --color-offline:    #6b7280;
+}
+
+.dark {
+  --bg-base:       #020617;
+  --bg-surface:    #0f172a;
+  --bg-surface-2:  #1e293b;
+  --bg-border:     rgba(148, 163, 184, 0.1);
+  --bg-hover:      rgba(148, 163, 184, 0.06);
+
+  --text-primary:   #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted:     #475569;
+
+  --sidebar-bg:     #020617;
+  --sidebar-border: rgba(148, 163, 184, 0.08);
+  --sidebar-active: rgba(16, 185, 129, 0.12);
+
+  --scroll-track:   #0f172a;
+  --scroll-thumb:   #334155;
+
+  --skeleton-from:  #1e293b;
+  --skeleton-to:    #334155;
+  --glass-bg:       rgba(30, 41, 59, 0.7);
+  --glass-border:   rgba(148, 163, 184, 0.08);
+
+  --card-title:     #f1f5f9;
+  --card-value:     #ffffff;
+  --card-label:     #94a3b8;
+  --card-sub:       #64748b;
+}
+
+/* ── Base ───────────────────────────────────────────────────────────────────── */
+body {
+  @apply antialiased;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--scroll-track); }
+::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 9999px; }
+
+/* ── Glassmorphism card ─────────────────────────────────────────────────────── */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+}
+
+/* ── Skeleton loader ────────────────────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--skeleton-from) 25%, var(--skeleton-to) 50%, var(--skeleton-from) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+/* ── Live pulse ─────────────────────────────────────────────────────────────── */
+@keyframes pulse-green {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+.pulse-green { animation: pulse-green 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+
+/* ── Status badges ──────────────────────────────────────────────────────────── */
+.status-normal   { color: #16a34a; background: rgba(34,197,94,0.10); }
+.status-warning  { color: #d97706; background: rgba(245,158,11,0.10); }
+.status-critical { color: #dc2626; background: rgba(239,68,68,0.10); }
+.status-unknown  { color: #6b7280; background: rgba(107,114,128,0.10); }
+.dark .status-normal   { color: #4ade80; }
+.dark .status-warning  { color: #fbbf24; }
+.dark .status-critical { color: #f87171; }
+.dark .status-unknown  { color: #94a3b8; }
+
+/* ── Number gradients ───────────────────────────────────────────────────────── */
+.number-gradient {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.number-gradient-blue {
+  background: linear-gradient(135deg, #60a5fa, #3b82f6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.number-gradient-amber {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ── Themed surface cards (light+dark) ──────────────────────────────────────── */
+.themed-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--bg-border);
+  border-radius: 1rem;
+}
+.themed-card-2 {
+  background: var(--bg-surface-2);
+  border: 1px solid var(--bg-border);
+  border-radius: 0.75rem;
+}
+
+/* ── Light-mode visibility fixes: override hardcoded slate-* Tailwind classes ── */
+/* These ensure dashboard card text shows on white background in light mode */
+:root .text-slate-200  { color: var(--card-value) !important; }
+:root .text-slate-300  { color: var(--card-label) !important; }
+:root .text-slate-400  { color: var(--card-label) !important; }
+:root .text-slate-500  { color: var(--card-sub)   !important; }
+:root .text-white      { color: var(--card-value) !important; }
+
+/* Dark mode: restore slate values */
+.dark .text-slate-200  { color: #e2e8f0 !important; }
+.dark .text-slate-300  { color: #cbd5e1 !important; }
+.dark .text-slate-400  { color: #94a3b8 !important; }
+.dark .text-slate-500  { color: #64748b !important; }
+.dark .text-white      { color: #ffffff !important; }
+
+/* ── Chart range toggle (shared by dashboard & electrical pages) ─────────────── */
+.chart-range-bar {
+  background: var(--bg-surface-2);
+  border: 1px solid var(--bg-border);
+  border-radius: 0.75rem;
+  padding: 3px;
+  display: flex;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+.chart-range-btn {
+  padding: 4px 10px;
+  border-radius: 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.chart-range-btn:hover  { color: var(--text-primary); background: var(--bg-hover); }
+.chart-range-btn.active { background: var(--bg-surface); color: var(--text-primary); box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+.dark .chart-range-btn.active { background: #334155; }
