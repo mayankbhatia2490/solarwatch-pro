@@ -34,7 +34,7 @@ from(bucket: "{bucket}")
 async def get_weather() -> Dict[str, Any]:
     """
     Fetches real-time weather from Open-Meteo for Karnal, Haryana (29.68°N, 76.99°E).
-    Calculates expected solar power using KSY 3.5kW inverter specs and actual PR=0.78.
+    Calculates expected solar power using KSY 3.4kW-1Ph (3570W DC array) and PR=0.78.
     Actual power comes from live InfluxDB reading (not mocked).
     """
     url = (

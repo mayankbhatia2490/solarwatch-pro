@@ -274,10 +274,7 @@ async def health_scorecard():
         {"parameter": "PV String 1",
          "value": f"{pv1_v:.0f}V / {pv1_a:.1f}A ({pv1_power:.0f}W)",
          "status": "normal" if pv1_v > 70 else ("warning" if pv1_v > 0 else "unknown")},
-        # KSY 5G-PRO+ = 1 MPPT, 1 String — PV2 port is not used
-        {"parameter": "PV String 2",
-         "value": "Not connected (single-string system)" if pv2_v < 5 else f"{pv2_v:.0f}V / {pv2_a:.1f}A ({pv2_power:.0f}W)",
-         "status": "normal" if pv2_v < 5 else ("normal" if pv2_v > 70 else "warning")},
+        # KSY 3.4kW-1Ph = 1 MPPT, 1 String — no second string on this inverter
         # Radiator temp: normal 40-75°C under load, warn >75°C, critical >85°C
         {"parameter": "Inverter Temp",
          "value": f"{temp:.1f}°C",

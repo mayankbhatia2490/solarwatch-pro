@@ -15,7 +15,6 @@ GRID_V_LOW    = 207.0
 GRID_V_HIGH   = 253.0
 FREQ_LOW      = 49.5
 FREQ_HIGH     = 50.5
-STRING_IMBAL  = 0.20   # 20% power deviation between strings
 
 
 @router.get("/")
@@ -37,8 +36,6 @@ from(bucket: "{BUCKET}")
         r["_field"] == "expected_power_w" or
         r["_field"] == "pv1_voltage" or
         r["_field"] == "pv1_current" or
-        r["_field"] == "pv2_voltage" or
-        r["_field"] == "pv2_current" or
         r["_field"] == "shortwave_radiation_wm2")
   |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
   |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
@@ -169,39 +166,7 @@ from(bucket: "{BUCKET}")
                     })
                     _id += 1
 
-            # ── 5. String power imbalance ─────────────────────────────────────
-            pv1_v = v.get("pv1_voltage") or 0
-            pv1_a = v.get("pv1_current") or 0
-            pv2_v = v.get("pv2_voltage") or 0
-            pv2_a = v.get("pv2_current") or 0
-            pv1_power = pv1_v * pv1_a
-            pv2_power = pv2_v * pv2_a
-
-            if pv1_power > 50 and pv2_power > 50 and radiation > 200:
-                max_power = max(pv1_power, pv2_power)
-                imbalance = abs(pv1_power - pv2_power) / max_power
-                if imbalance > STRING_IMBAL:
-                    weaker = "String 1" if pv1_power < pv2_power else "String 2"
-                    weaker_w = min(pv1_power, pv2_power)
-                    stronger_w = max(pv1_power, pv2_power)
-                    lost_w = stronger_w - weaker_w
-                    impact_inr = round(lost_w / 1000 * settings.electricity_tariff_inr, 1)
-                    anomalies.append({
-                        "id": f"imbal-{_id}",
-                        "timestamp": time_iso,
-                        "severity": "warning",
-                        "source": "Intelligence",
-                        "parameter": f"{imbalance*100:.0f}% imbalance",
-                        "title": f"String Power Imbalance — {weaker} Underperforming",
-                        "description": (
-                            f"String 1: {pv1_power:.0f}W | String 2: {pv2_power:.0f}W. "
-                            f"{weaker} is producing {imbalance*100:.0f}% less than expected. "
-                            f"Likely cause: soiling, shading, or a loose MC4 connector on {weaker}."
-                        ),
-                        "impact_inr": impact_inr,
-                        "action": f"Inspect {weaker} panels for dirt, bird droppings, or shading objects."
-                    })
-                    _id += 1
+            # KSY 3.4kW-1Ph has 1 MPPT / 1 string — no second string to compare.
 
         # Deduplicate: keep only the most severe occurrence per anomaly type per day
         # (hourly scan can produce many rows for a persistent condition)

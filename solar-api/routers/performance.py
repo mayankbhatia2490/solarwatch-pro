@@ -14,10 +14,10 @@ def get_performance_data() -> Dict[str, Any]:
     Returns long-term performance using real InfluxDB monthly energy data.
     YoY comparison uses actual collected data.
     Performance Ratio calculated from actual vs irradiance-based expected.
-    KSY 5G-PRO+ specs: 98% max efficiency, PR=0.78 India standard.
+    KSY 3.4kW-1Ph specs: 98% max efficiency, PR=0.78 India standard.
     """
     now = datetime.now(timezone.utc)
-    install_date = datetime(2025, 4, 17, tzinfo=timezone.utc)
+    install_date = datetime.fromisoformat(settings.installation_date + "T00:00:00+00:00")
 
     days_old  = (now - install_date).days
     years_old = days_old / 365.25
@@ -191,7 +191,7 @@ from(bucket: "{BUCKET}")
             "total_energy_kwh": round(total_energy_kwh, 1),
             "yoy_data": yoy_data,
             "best_days": best_days,
-            "inverter_model": "KSY 5G-PRO+ 3.5kW",
+            "inverter_model": "KSY 3.4kW-1Ph",
             "inverter_max_efficiency_pct": 98.0,
             "design_pr": 78.0,
         }
