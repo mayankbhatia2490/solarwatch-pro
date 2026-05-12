@@ -2,11 +2,14 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import { useTheme } from "next-themes";
 import { Thermometer, Zap, AlertTriangle } from "lucide-react";
 
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
 export default function ThermalPage() {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -39,18 +42,18 @@ export default function ThermalPage() {
 
   const options: any = {
     chart: { type: "line", toolbar: { show: false }, zoom: { enabled: false }, animations: { enabled: false } },
-    theme: { mode: "dark" },
+    theme: { mode: isDark ? "dark" : "light" },
     stroke: { curve: "smooth", width: [3, 3, 0] },
     colors: ["#ef4444", "#f97316", "#22c55e"], // Red, Orange, Green
     fill: {
       type: ['solid', 'solid', 'gradient'],
       gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.05, stops: [0, 90, 100] }
     },
-    xaxis: { type: "datetime", labels: { style: { colors: "#94a3b8" } }, axisBorder: { show: false }, axisTicks: { show: false } },
+    xaxis: { type: "datetime", labels: { style: { colors: isDark ? "#94a3b8" : "#475569" } }, axisBorder: { show: false }, axisTicks: { show: false } },
     yaxis: [
       { 
         title: { text: "Temperature (°C)", style: { color: "#ef4444" } }, 
-        labels: { style: { colors: "#94a3b8" }, formatter: (v: number) => `${v.toFixed(1)}°C` },
+        labels: { style: { colors: isDark ? "#94a3b8" : "#475569" }, formatter: (v: number) => `${v.toFixed(1)}°C` },
         min: 20, max: 80
       },
       { 
@@ -60,13 +63,13 @@ export default function ThermalPage() {
       { 
         opposite: true, 
         title: { text: "Power (W)", style: { color: "#22c55e" } },
-        labels: { style: { colors: "#94a3b8" }, formatter: (v: number) => `${v.toFixed(0)}W` },
+        labels: { style: { colors: isDark ? "#94a3b8" : "#475569" }, formatter: (v: number) => `${v.toFixed(0)}W` },
         min: 0, max: 4000
       }
     ],
-    grid: { borderColor: "rgba(148, 163, 184, 0.1)", strokeDashArray: 4 },
-    tooltip: { theme: "dark", shared: true, intersect: false },
-    legend: { labels: { colors: "#f1f5f9" } },
+    grid: { borderColor: isDark ? "rgba(148, 163, 184, 0.1)" : "#e2e8f0", strokeDashArray: 4 },
+    tooltip: { theme: isDark ? "dark" : "light", shared: true, intersect: false },
+    legend: { labels: { colors: isDark ? "#f1f5f9" : "#334155" } },
     annotations: {
       yAxis: [
         { y: 65, borderColor: '#eab308', strokeDashArray: 4, label: { text: 'Warn (65°C)', style: { color: '#000', background: '#eab308' } } },

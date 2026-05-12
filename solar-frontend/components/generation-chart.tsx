@@ -1,5 +1,6 @@
 "use client";
 import dynamic from "next/dynamic";
+import { useTheme } from "next-themes";
 
 const ApexChart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
@@ -8,9 +9,16 @@ interface GenerationChartProps {
 }
 
 export function GenerationChart({ data }: GenerationChartProps) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+
   const times = data.map(d => new Date(d.time).getTime());
   const actual = data.map(d => d.power_w);
   const expected = data.map(d => d.expected_w);
+
+  const labelColor  = isDark ? "#64748b" : "#94a3b8";
+  const gridColor   = isDark ? "#1e293b" : "#e2e8f0";
+  const legendColor = isDark ? "#94a3b8" : "#475569";
 
   const options: ApexCharts.ApexOptions = {
     chart: {
@@ -20,7 +28,7 @@ export function GenerationChart({ data }: GenerationChartProps) {
       zoom: { enabled: true },
       animations: { enabled: true, speed: 800 },
     },
-    theme: { mode: "dark" },
+    theme: { mode: isDark ? "dark" : "light" },
     colors: ["#22c55e", "#3b82f6"],
     stroke: { curve: "smooth", width: [2, 1.5] },
     fill: {
@@ -34,24 +42,24 @@ export function GenerationChart({ data }: GenerationChartProps) {
     xaxis: {
       type: "datetime",
       categories: times,
-      labels: { style: { colors: "#64748b" }, datetimeUTC: false },
+      labels: { style: { colors: labelColor }, datetimeUTC: false },
       axisBorder: { show: false },
       axisTicks: { show: false },
     },
     yaxis: {
       labels: {
-        style: { colors: "#64748b" },
+        style: { colors: labelColor },
         formatter: (v) => `${(v / 1000).toFixed(1)}kW`,
       },
     },
-    grid: { borderColor: "#1e293b", strokeDashArray: 4 },
+    grid: { borderColor: gridColor, strokeDashArray: 4 },
     legend: {
-      labels: { colors: "#94a3b8" },
+      labels: { colors: legendColor },
       position: "top",
       horizontalAlign: "right",
     },
     tooltip: {
-      theme: "dark",
+      theme: isDark ? "dark" : "light",
       x: { format: "HH:mm dd MMM" },
       y: { formatter: (v) => `${v.toFixed(0)} W` },
     },
@@ -64,7 +72,7 @@ export function GenerationChart({ data }: GenerationChartProps) {
 
   if (!data.length) {
     return (
-      <div className="flex items-center justify-center h-64 text-slate-500 text-sm">
+      <div className="flex items-center justify-center h-64 text-sm" style={{ color: "var(--card-sub)" }}>
         No data for selected range
       </div>
     );

@@ -2,11 +2,14 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import { useTheme } from "next-themes";
 import { Activity, Zap } from "lucide-react";
 
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
 export default function GridPage() {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -41,18 +44,18 @@ export default function GridPage() {
 
   const commonOptions: any = {
     chart: { type: "line", toolbar: { show: false }, zoom: { enabled: false }, animations: { enabled: false } },
-    theme: { mode: "dark" },
+    theme: { mode: isDark ? "dark" : "light" },
     stroke: { curve: "smooth", width: 2 },
-    xaxis: { type: "datetime", labels: { style: { colors: "#94a3b8" } }, axisBorder: { show: false }, axisTicks: { show: false } },
-    grid: { borderColor: "rgba(148, 163, 184, 0.1)", strokeDashArray: 4 },
-    tooltip: { theme: "dark" },
+    xaxis: { type: "datetime", labels: { style: { colors: isDark ? "#94a3b8" : "#475569" } }, axisBorder: { show: false }, axisTicks: { show: false } },
+    grid: { borderColor: isDark ? "rgba(148, 163, 184, 0.1)" : "#e2e8f0", strokeDashArray: 4 },
+    tooltip: { theme: isDark ? "dark" : "light" },
     legend: { show: false }
   };
 
   const voltageOptions = {
     ...commonOptions,
     colors: ["#ef4444"],
-    yaxis: { min: 180, max: 280, labels: { style: { colors: "#94a3b8" }, formatter: (v: number) => `${v.toFixed(0)}V` } },
+    yaxis: { min: 180, max: 280, labels: { style: { colors: isDark ? "#94a3b8" : "#475569" }, formatter: (v: number) => `${v.toFixed(0)}V` } },
     annotations: {
       yAxis: [
         { y: 230, borderColor: '#22c55e', label: { text: 'Nominal 230V', style: { color: '#fff', background: '#22c55e' } } },
@@ -65,7 +68,7 @@ export default function GridPage() {
   const frequencyOptions = {
     ...commonOptions,
     colors: ["#8b5cf6"],
-    yaxis: { min: 48, max: 52, labels: { style: { colors: "#94a3b8" }, formatter: (v: number) => `${v.toFixed(2)}Hz` } },
+    yaxis: { min: 48, max: 52, labels: { style: { colors: isDark ? "#94a3b8" : "#475569" }, formatter: (v: number) => `${v.toFixed(2)}Hz` } },
     annotations: {
       yAxis: [
         { y: 50, borderColor: '#22c55e', label: { text: 'Nominal 50Hz', style: { color: '#fff', background: '#22c55e' } } },

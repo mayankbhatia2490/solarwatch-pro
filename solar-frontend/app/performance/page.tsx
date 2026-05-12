@@ -2,11 +2,14 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import { useTheme } from "next-themes";
 import { TrendingDown, CalendarDays, BatteryCharging, Zap } from "lucide-react";
 
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
 export default function PerformancePage() {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -37,15 +40,15 @@ export default function PerformancePage() {
 
   const yoyOptions: any = {
     chart: { type: "bar", toolbar: { show: false } },
-    theme: { mode: "dark" },
+    theme: { mode: isDark ? "dark" : "light" },
     colors: ["#22c55e", "#64748b"], // Green, Slate
     plotOptions: { bar: { borderRadius: 4, columnWidth: '50%' } },
     dataLabels: { enabled: false },
-    xaxis: { categories: data.yoy_data.map((d: any) => d.month), labels: { style: { colors: "#94a3b8" } }, axisBorder: { show: false }, axisTicks: { show: false } },
-    yaxis: { title: { text: "Energy (kWh)", style: { color: "#94a3b8" } }, labels: { style: { colors: "#94a3b8" } } },
-    grid: { borderColor: "rgba(148, 163, 184, 0.1)", strokeDashArray: 4 },
-    tooltip: { theme: "dark" },
-    legend: { labels: { colors: "#f1f5f9" } }
+    xaxis: { categories: data.yoy_data.map((d: any) => d.month), labels: { style: { colors: isDark ? "#94a3b8" : "#475569" } }, axisBorder: { show: false }, axisTicks: { show: false } },
+    yaxis: { title: { text: "Energy (kWh)", style: { color: "#94a3b8" } }, labels: { style: { colors: isDark ? "#94a3b8" : "#475569" } } },
+    grid: { borderColor: isDark ? "rgba(148, 163, 184, 0.1)" : "#e2e8f0", strokeDashArray: 4 },
+    tooltip: { theme: isDark ? "dark" : "light" },
+    legend: { labels: { colors: isDark ? "#f1f5f9" : "#334155" } }
   };
 
   return (
