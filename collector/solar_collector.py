@@ -50,7 +50,7 @@ EMAIL_FROM    = os.environ.get('EMAIL_FROM')
 EMAIL_TO      = os.environ.get('EMAIL_TO')
 
 # System specs
-INSTALLED_CAPACITY_W  = float(os.environ.get('INSTALLED_CAPACITY_W', '3500'))
+INSTALLED_CAPACITY_W  = float(os.environ.get('INSTALLED_CAPACITY_W', '3400'))
 ELECTRICITY_TARIFF_INR = float(os.environ.get('ELECTRICITY_TARIFF_INR', '6.5'))
 
 # KSY 5G-PRO+ temperature coefficient: -0.39%/°C (from datasheet)

@@ -68,49 +68,24 @@ from(bucket: "{BUCKET}")
 def _compute_live_health() -> int:
     """
     Compute real health score 0-100 from live readings.
-    Deductions: grid voltage (all 3 phases), temperature, string balance, PR.
+    KSY 3.4KW-1Ph: single-phase, 1 MPPT, 1 PV string — no S/T phase, no PV2 imbalance.
     """
     score = 100
 
-    # Grid voltage — all 3 phases
-    for field in ("grid_r_voltage", "grid_s_voltage", "grid_t_voltage"):
-        v = _latest(field)
-        if v > 0:
-            if v < 207 or v > 253:
-                score -= 15
-            elif v < 215 or v > 245:
-                score -= 5
+    # Grid voltage — R phase only (single-phase inverter confirmed from nameplate)
+    gv = _latest("grid_r_voltage")
+    if gv > 0:
+        if gv < 207 or gv > 253:
+            score -= 20
+        elif gv < 215 or gv > 245:
+            score -= 10
 
-    # Phase imbalance (R vs S vs T)
-    r = _latest("grid_r_voltage")
-    s = _latest("grid_s_voltage")
-    t = _latest("grid_t_voltage")
-    if all(x > 100 for x in (r, s, t)):
-        avg = (r + s + t) / 3
-        max_dev = max(abs(r - avg), abs(s - avg), abs(t - avg))
-        imbalance_pct = (max_dev / avg) * 100
-        if imbalance_pct > 5.0:
-            score -= 15
-        elif imbalance_pct > 3.0:
-            score -= 8
-
-    # Heatsink temperature
+    # Heatsink temperature (F6 derating >75°C, F8 fault risk >85°C)
     temp = _latest("internal_radiator_temperature")
     if temp > 85:
         score -= 30
     elif temp > 75:
         score -= 15
-
-    # String power imbalance
-    pv1_w = _latest("pv1_voltage") * _latest("pv1_current")
-    pv2_w = _latest("pv2_voltage") * _latest("pv2_current")
-    if pv1_w > 50 and pv2_w > 50:
-        max_w = max(pv1_w, pv2_w)
-        imb = abs(pv1_w - pv2_w) / max_w
-        if imb > 0.20:
-            score -= 15
-        elif imb > 0.10:
-            score -= 8
 
     # Performance ratio during daylight
     if _is_daytime():
@@ -123,7 +98,7 @@ def _compute_live_health() -> int:
             elif pr < 0.80:
                 score -= 5
 
-    # PV1 absent while online
+    # PV1 absent while online during daylight
     pv1v = _latest("pv1_voltage")
     stat = int(_latest("status_code"))
     if pv1v < 50 and stat == 0 and _is_daytime():

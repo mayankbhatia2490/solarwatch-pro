@@ -28,23 +28,27 @@ from(bucket: "{BUCKET}")
 
 def _compute_health(live: dict) -> int:
     score = 100
-    # Grid voltage check (207-253V nominal)
+    # Grid voltage — single-phase (KSY 3.4KW-1Ph), R phase only
     v = live.get("grid_r_voltage", 230)
     if v < 207 or v > 253: score -= 20
     elif v < 215 or v > 245: score -= 10
-    # Inverter RADIATOR (heatsink) temperature check
-    # Datasheet: max AMBIENT operating temp = 60°C
-    # Internal radiator probe runs 20-35°C above ambient under load
-    # Normal at full load: 50-75°C. Fault F8 triggers around 85-90°C.
+    # Heatsink temperature: normal 40-75°C under load; warn >75°C; F8 fault risk >85°C
     t = live.get("internal_radiator_temperature", 40)
-    if t > 85:   score -= 30  # Critical: F8 thermal fault imminent
-    elif t > 75: score -= 15  # Warning: high, approaching protection limit
-    # Note: 40-75°C is NORMAL for a heatsink under load on a hot Indian day
-    # String balance check — KSY has 1 MPPT, 1 string
+    if t > 85:   score -= 30
+    elif t > 75: score -= 15
+    # Performance ratio during daylight
+    if not live.get("is_night", False):
+        power    = live.get("power_now_w", 0)
+        expected = live.get("expected_power_w", 0)
+        if expected > 200:
+            pr = power / expected
+            if pr < 0.60:   score -= 15
+            elif pr < 0.80: score -= 5
+    # PV1 absent while online during daylight
     pv1 = live.get("pv1_voltage", 0)
-    if pv1 < 50 and live.get("status_code", 0) == 0:
-        score -= 15  # PV1 absent despite inverter being online
-    # Status check — but only penalise if it's daytime
+    if pv1 < 50 and live.get("status_code", 0) == 0 and not live.get("is_night", False):
+        score -= 15
+    # Inverter offline during daylight
     if live.get("status_code", 0) == 1 and not live.get("is_night", False):
         score -= 30
     return max(0, score)
@@ -129,11 +133,13 @@ from(bucket: "{BUCKET}")
     payback_pct = round(min(total_savings / system_cost * 100, 100), 1) if system_cost > 0 else 0
     years_to_payback = round((system_cost - total_savings) / (total_savings / max(days_since_install, 1) * 365), 1) if total_savings > 0 and total_savings < system_cost else 0
 
+    expected_power = _latest("expected_power_w")
     live = {
         "pv1_voltage": pv1_v, "pv1_current": pv1_a,
         "pv2_voltage": pv2_v, "pv2_current": pv2_a,
         "grid_r_voltage": grid_v, "internal_radiator_temperature": temp,
-        "status_code": status, "is_night": is_night
+        "status_code": status, "is_night": is_night,
+        "power_now_w": power, "expected_power_w": expected_power,
     }
     health_score = _compute_health(live)
 
