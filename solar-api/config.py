@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
 
-    installed_capacity_w: float = 3400.0
+    installed_capacity_w: float = 3570.0  # 6 × Vikram Solar HyperSol 595W STC
     electricity_tariff_inr: float = 6.5
     system_cost_inr: float = 220000.0
     installation_date: str = "2025-04-17"

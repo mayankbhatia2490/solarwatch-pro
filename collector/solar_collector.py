@@ -49,14 +49,16 @@ SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD')
 EMAIL_FROM    = os.environ.get('EMAIL_FROM')
 EMAIL_TO      = os.environ.get('EMAIL_TO')
 
-# System specs
-INSTALLED_CAPACITY_W  = float(os.environ.get('INSTALLED_CAPACITY_W', '3400'))
+# System specs — 6 × Vikram Solar HyperSol VSMDH.72.595.05 + KSY 3.4kW-1Ph
+INSTALLED_CAPACITY_W  = float(os.environ.get('INSTALLED_CAPACITY_W', '3570'))  # 6 × 595W STC
 ELECTRICITY_TARIFF_INR = float(os.environ.get('ELECTRICITY_TARIFF_INR', '6.5'))
 
-# Waaree monocrystalline panel Pmax temperature coefficient: -0.38%/°C
-# Source: Waaree WS series datasheet (standard mono range: -0.35% to -0.40%/°C)
-# Applies to panels, NOT the KSY inverter. Update if you have exact panel model datasheet.
-TEMP_COEFF_PER_C = -0.0038
+# Vikram Solar HyperSol VSMDH.72.595.05 — N-type bifacial, M10 half-cut, 144 cells
+# Source: Vikram Solar datasheet VSL/ENG/SC/325-V02/STD
+TEMP_COEFF_PER_C   = -0.0030   # γ (Pmax): -0.30%/°C  (N-type advantage over -0.38% PERC)
+NOCT               = 45.0       # °C ± 2°C (IEC standard, from datasheet)
+BIFACIAL_REAR_GAIN = 0.07       # 7% conservative rear irradiance for Indian rooftop
+                                 # (BNPI φ=0.135=13.5%; real rooftop ~5-10% depending on albedo)
 
 # Alerting State
 ALARM_STATE = {
@@ -358,20 +360,20 @@ def fetch_weather_data():
 
 def compute_expected_power(weather):
     """
-    Temperature-corrected STC power formula for KSY 5G-PRO+:
-      P = (G/1000) × P_rated × PR × [1 + γ × (T_cell - 25)]
-    where:
-      G     = irradiance (W/m²)
-      P_rated = installed capacity (W)
-      PR    = 0.78 (India standard performance ratio)
-      γ     = -0.0039 /°C (KSY datasheet temperature coefficient)
-      T_cell = ambient_temp + 25°C NOCT rise (standard rooftop approximation)
+    Temperature-corrected expected power for Vikram Solar HyperSol N-type bifacial:
+      P = (G/1000) × P_rated × (1 + bifacial_gain) × PR × [1 + γ × (T_cell - 25)]
+
+      T_cell = T_ambient + (NOCT - 20) × G/800   ← IEC NOCT correction (irradiance-scaled)
+      γ      = -0.0030/°C  (Vikram HyperSol datasheet)
+      NOCT   = 45°C
+      bifacial_gain = 7% rear irradiance contribution (conservative Indian rooftop)
+      PR     = 0.78 (India standard: wiring, inverter, mismatch losses)
     """
     G = weather['shortwave_radiation_wm2']
     T_ambient = weather['temperature_c']
-    T_cell = T_ambient + 25.0  # NOCT rise approximation
+    T_cell = T_ambient + (NOCT - 20.0) * (G / 800.0)
     temp_correction = 1 + TEMP_COEFF_PER_C * (T_cell - 25.0)
-    expected = (G / 1000.0) * INSTALLED_CAPACITY_W * 0.78 * temp_correction
+    expected = (G / 1000.0) * INSTALLED_CAPACITY_W * (1 + BIFACIAL_REAR_GAIN) * 0.78 * temp_correction
     return max(0.0, round(expected, 1))
 
 
