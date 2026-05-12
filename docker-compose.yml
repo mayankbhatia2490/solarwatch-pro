@@ -1,37 +1,29 @@
 version: '3.8'
 
+# SolarWatch Pro — Synology DS220+/DS224+ (x86_64, DSM 7.3+)
+# Single entry point: nginx on port 8080
+# DSM Reverse Proxy → 8080 handles both frontend (/) and API (/api/)
+# Portainer: manage containers at http://192.168.1.20:9000
+
 services:
+
+  # ── Time-series database ─────────────────────────────────────────────────────
   influxdb:
     image: influxdb:2.7
     container_name: solar-influxdb
     restart: unless-stopped
-    ports:
-      - "8086:8086"
+    # Not exposed externally — only solar-api and solar-collector can reach it
     volumes:
       - ./data/influxdb:/var/lib/influxdb2
     environment:
       - DOCKER_INFLUXDB_INIT_MODE=setup
       - DOCKER_INFLUXDB_INIT_USERNAME=admin
-      - DOCKER_INFLUXDB_INIT_PASSWORD=adminpassword
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_ADMIN_PASSWORD:-changeme123}
       - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG:-solar}
       - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET:-solar_metrics}
       - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN}
 
-  grafana:
-    image: grafana/grafana:latest
-    container_name: solar-grafana
-    restart: unless-stopped
-    ports:
-      - "3002:3000"
-    volumes:
-      - ./data/grafana:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning
-    environment:
-      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-admin}
-    depends_on:
-      - influxdb
-
+  # ── ShineMonitor data collector ──────────────────────────────────────────────
   solar-collector:
     build: ./collector
     container_name: solar-collector
@@ -46,23 +38,16 @@ services:
       - SHINEMONITOR_PN=${SHINEMONITOR_PN}
       - SHINEMONITOR_SN=${SHINEMONITOR_SN}
       - SHINEMONITOR_DEVCODE=${SHINEMONITOR_DEVCODE}
-      - LATITUDE=${LATITUDE}
-      - LONGITUDE=${LONGITUDE}
-      - TIMEZONE=${TIMEZONE}
+      - LATITUDE=${LATITUDE:-29.693405600010355}
+      - LONGITUDE=${LONGITUDE:-76.99938211551195}
+      - TIMEZONE=${TIMEZONE:-Asia/Kolkata}
       - INFLUXDB_URL=http://influxdb:8086
       - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
       - INFLUXDB_ORG=${INFLUXDB_ORG:-solar}
       - INFLUXDB_BUCKET=${INFLUXDB_BUCKET:-solar_metrics}
-      - SMTP_SERVER=${SMTP_SERVER}
-      - SMTP_PORT=${SMTP_PORT}
-      - SMTP_USERNAME=${SMTP_USERNAME}
-      - SMTP_PASSWORD=${SMTP_PASSWORD}
-      - EMAIL_FROM=${EMAIL_FROM}
-      - EMAIL_TO=${EMAIL_TO}
-      - INSTALLED_CAPACITY_W=${INSTALLED_CAPACITY_W}
+      - INSTALLED_CAPACITY_W=${INSTALLED_CAPACITY_W:-3570}
       - ELECTRICITY_TARIFF_INR=${ELECTRICITY_TARIFF_INR:-6.5}
       - SITE_ID=${SITE_ID:-default}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
     depends_on:
       - influxdb
     healthcheck:
@@ -72,42 +57,78 @@ services:
       retries: 5
       start_period: 60s
 
+  # ── FastAPI backend + monitor (Telegram alerts, daily report) ────────────────
   solar-api:
     build: ./solar-api
     container_name: solar-api
     restart: unless-stopped
-    ports:
-      - "8090:8090"
+    # Not exposed externally — nginx proxies /api/* to this container
     volumes:
       - ./data/api:/app/data
     environment:
+      # InfluxDB
       - INFLUXDB_URL=http://influxdb:8086
       - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
       - INFLUXDB_ORG=${INFLUXDB_ORG:-solar}
       - INFLUXDB_BUCKET=${INFLUXDB_BUCKET:-solar_metrics}
+      # Telegram
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
-      - INSTALLED_CAPACITY_W=${INSTALLED_CAPACITY_W:-3500}
+      # System config
+      - INSTALLED_CAPACITY_W=${INSTALLED_CAPACITY_W:-3570}
       - ELECTRICITY_TARIFF_INR=${ELECTRICITY_TARIFF_INR:-6.5}
-      - SYSTEM_COST_INR=${SYSTEM_COST_INR:-220000}
+      - SYSTEM_COST_INR=${SYSTEM_COST_INR:-190000}
       - INSTALLATION_DATE=${INSTALLATION_DATE:-2025-04-17}
       - PLANT_NAME=${PLANT_NAME:-My Solar System}
-      - LATITUDE=${LATITUDE:-29.6857}
-      - LONGITUDE=${LONGITUDE:-76.9905}
+      - MONTHLY_CONSUMPTION_KWH=${MONTHLY_CONSUMPTION_KWH:-600}
+      - LATITUDE=${LATITUDE:-29.693405600010355}
+      - LONGITUDE=${LONGITUDE:-76.99938211551195}
+      - TIMEZONE=${TIMEZONE:-Asia/Kolkata}
+      - LOCATION_NAME=${LOCATION_NAME:-Karnal, Haryana}
+      - SITE_ID=${SITE_ID:-default}
+      # AI
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      # UHBVN tariff slabs
+      - TARIFF_YEAR=${TARIFF_YEAR:-2025-26}
+      - TARIFF_SLAB1_LIMIT=${TARIFF_SLAB1_LIMIT:-100}
+      - TARIFF_SLAB1_RATE=${TARIFF_SLAB1_RATE:-2.50}
+      - TARIFF_SLAB2_LIMIT=${TARIFF_SLAB2_LIMIT:-300}
+      - TARIFF_SLAB2_RATE=${TARIFF_SLAB2_RATE:-5.25}
+      - TARIFF_SLAB3_LIMIT=${TARIFF_SLAB3_LIMIT:-500}
+      - TARIFF_SLAB3_RATE=${TARIFF_SLAB3_RATE:-6.50}
+      - TARIFF_SLAB4_RATE=${TARIFF_SLAB4_RATE:-7.00}
+      - TARIFF_FUEL_SURCHARGE_PER_UNIT=${TARIFF_FUEL_SURCHARGE_PER_UNIT:-0.35}
+      - TARIFF_ELECTRICITY_DUTY_PCT=${TARIFF_ELECTRICITY_DUTY_PCT:-5.0}
+      - TARIFF_METER_RENT_INR=${TARIFF_METER_RENT_INR:-30.0}
     depends_on:
       - influxdb
 
+  # ── Next.js dashboard ────────────────────────────────────────────────────────
   solar-frontend:
     build:
       context: ./solar-frontend
       args:
-        - NEXT_PUBLIC_API_URL=http://192.168.1.20:8090
+        # Empty = relative URLs (/api/...) — works from local IP, DDNS, or any domain
+        # without rebuilding. nginx routes /api/* to solar-api automatically.
+        - NEXT_PUBLIC_API_URL=
     container_name: solar-frontend
     restart: unless-stopped
-    ports:
-      - "3010:3010"
+    # Not exposed externally — nginx proxies / to this container
     environment:
       - PORT=3010
       - HOSTNAME=0.0.0.0
     depends_on:
+      - solar-api
+
+  # ── Nginx reverse proxy — single public entry point ──────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: solar-nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"   # DSM Reverse Proxy → this port → frontend + API
+    volumes:
+      - ./nginx/solar.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - solar-frontend
       - solar-api
