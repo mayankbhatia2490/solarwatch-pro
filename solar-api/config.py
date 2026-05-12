@@ -23,6 +23,23 @@ class Settings(BaseSettings):
     location_name: str = "Karnal, Haryana"
     site_id: str = "default"
 
+    # ── UHBVN domestic tariff slabs — configurable so rates can be updated
+    # without a code change when HERC issues new orders.
+    # Set these in .env or via /api/settings PATCH.
+    # Verify current rates at: https://www.uhbvn.org.in/tariff
+    tariff_year: str = "2025-26"
+    tariff_slab1_limit: int = 100        # units; 0 → this limit at slab1 rate
+    tariff_slab1_rate: float = 2.50      # ₹/unit
+    tariff_slab2_limit: int = 300        # units; slab1_limit+1 → this limit
+    tariff_slab2_rate: float = 5.25
+    tariff_slab3_limit: int = 500
+    tariff_slab3_rate: float = 6.50
+    tariff_slab4_rate: float = 7.00      # 501+ units
+
+    tariff_fuel_surcharge_per_unit: float = 0.35   # ₹/unit (variable — check latest bill)
+    tariff_electricity_duty_pct: float = 5.0        # % of energy charges
+    tariff_meter_rent_inr: float = 30.0             # ₹/month fixed
+
     class Config:
         env_file = ".env"
         extra = "ignore"
@@ -30,33 +47,29 @@ class Settings(BaseSettings):
 settings = Settings()
 
 
-# ── UHBVN domestic tariff — HERC order FY 2025-26 ────────────────────────────
-# Applicable: Karnal, Panipat, Ambala, Yamuna Nagar, Kurukshetra, Sonipat
-# Verify latest at: https://www.uhbvn.org.in/tariff
-UHBVN_ENERGY_SLABS = [
-    {"limit": 100,        "rate": 2.50, "label": "0–100 units"},
-    {"limit": 300,        "rate": 5.25, "label": "101–300 units"},
-    {"limit": 500,        "rate": 6.50, "label": "301–500 units"},
-    {"limit": float("inf"), "rate": 7.00, "label": "501+ units"},
-]
-
-# Fixed charges that apply regardless of solar (not included in "savings"):
-UHBVN_FIXED = {
-    "meter_rent_inr":           30.0,    # ₹/month
-    "fuel_surcharge_per_unit":   0.35,   # ₹/kWh (variable, tracks fuel cost)
-    "electricity_duty_pct":      5.0,    # % of energy charges only
-}
-
-TARIFF_YEAR = "2025-26"
+def _get_slabs() -> list[dict]:
+    """Build the slab table from current settings (supports runtime updates)."""
+    s = settings
+    return [
+        {"limit": s.tariff_slab1_limit, "rate": s.tariff_slab1_rate,
+         "label": f"0–{s.tariff_slab1_limit} units"},
+        {"limit": s.tariff_slab2_limit, "rate": s.tariff_slab2_rate,
+         "label": f"{s.tariff_slab1_limit+1}–{s.tariff_slab2_limit} units"},
+        {"limit": s.tariff_slab3_limit, "rate": s.tariff_slab3_rate,
+         "label": f"{s.tariff_slab2_limit+1}–{s.tariff_slab3_limit} units"},
+        {"limit": float("inf"), "rate": s.tariff_slab4_rate,
+         "label": f"{s.tariff_slab3_limit+1}+ units"},
+    ]
 
 
 def _energy_charge(units: float) -> tuple[float, list[dict]]:
     """Return (total_energy_charge, slab_breakdown) for given units consumed."""
+    slabs = _get_slabs()
     charge = 0.0
     remaining = units
     prev = 0
     breakdown = []
-    for slab in UHBVN_ENERGY_SLABS:
+    for slab in slabs:
         if remaining <= 0:
             break
         cap = slab["limit"] - prev
@@ -78,14 +91,14 @@ def _energy_charge(units: float) -> tuple[float, list[dict]]:
 def calculate_uhbvn_bill(units_kwh: float) -> dict:
     """
     Full UHBVN domestic bill for given kWh consumed.
-    Returns total and line-item breakdown including surcharges.
+    Uses tariff values from settings — update .env to reflect new HERC orders.
     """
     energy_charge, breakdown = _energy_charge(units_kwh)
-    fuel_surcharge = round(units_kwh * UHBVN_FIXED["fuel_surcharge_per_unit"], 2)
-    electricity_duty = round(energy_charge * UHBVN_FIXED["electricity_duty_pct"] / 100, 2)
-    fixed = UHBVN_FIXED["meter_rent_inr"]
-    total = round(energy_charge + fuel_surcharge + electricity_duty + fixed, 2)
-    effective_rate = round(total / units_kwh, 2) if units_kwh > 0 else 0.0
+    fuel_surcharge    = round(units_kwh * settings.tariff_fuel_surcharge_per_unit, 2)
+    electricity_duty  = round(energy_charge * settings.tariff_electricity_duty_pct / 100, 2)
+    fixed             = settings.tariff_meter_rent_inr
+    total             = round(energy_charge + fuel_surcharge + electricity_duty + fixed, 2)
+    effective_rate    = round(total / units_kwh, 2) if units_kwh > 0 else 0.0
 
     return {
         "units_consumed":         round(units_kwh, 1),
@@ -104,13 +117,12 @@ def solar_bill_savings(monthly_kwh_generated: float, monthly_kwh_consumed: float
     Real rupee savings under UHBVN slab rates with full surcharge calculation.
     Solar offsets grid consumption — highest-tariff slabs saved first.
     """
-    without = calculate_uhbvn_bill(monthly_kwh_consumed)
-    net = max(0.0, monthly_kwh_consumed - monthly_kwh_generated)
+    without    = calculate_uhbvn_bill(monthly_kwh_consumed)
+    net        = max(0.0, monthly_kwh_consumed - monthly_kwh_generated)
     with_solar = calculate_uhbvn_bill(net)
-    savings = round(without["total_bill"] - with_solar["total_bill"], 2)
+    savings    = round(without["total_bill"] - with_solar["total_bill"], 2)
     effective_rate = round(savings / monthly_kwh_generated, 2) if monthly_kwh_generated > 0 else 0
 
-    # Identify which slabs are avoided by solar
     slab_without = without["slab_breakdown"][-1]["slab"] if without["slab_breakdown"] else "—"
     slab_with    = with_solar["slab_breakdown"][-1]["slab"] if with_solar["slab_breakdown"] else "—"
 
@@ -125,11 +137,10 @@ def solar_bill_savings(monthly_kwh_generated: float, monthly_kwh_consumed: float
         "slab_without_solar":         slab_without,
         "slab_with_solar":            slab_with,
         "slab_benefit_inr":           round(
-            (without["energy_charge"] - with_solar["energy_charge"]) -
-            (without["fuel_surcharge"] - with_solar["fuel_surcharge"]) * 0, 2
+            without["energy_charge"] - with_solar["energy_charge"], 2
         ),
-        "distributor":   "UHBVN",
-        "tariff_year":   TARIFF_YEAR,
+        "distributor":    "UHBVN",
+        "tariff_year":    settings.tariff_year,
         "detail_without": without,
         "detail_with":    with_solar,
     }

@@ -1,7 +1,17 @@
+from contextvars import ContextVar
 from influxdb_client import InfluxDBClient
 from config import settings
 
 _client = None
+
+# Per-request site_id — set by middleware, consumed by query()
+_site_id_var: ContextVar[str] = ContextVar("site_id", default="")
+
+def set_request_site_id(site_id: str) -> None:
+    _site_id_var.set(site_id)
+
+def get_request_site_id() -> str:
+    return _site_id_var.get()
 
 def get_client() -> InfluxDBClient:
     global _client
@@ -14,6 +24,11 @@ def get_client() -> InfluxDBClient:
     return _client
 
 def query(flux: str) -> list:
+    site_id = _site_id_var.get()
+    if site_id and site_id != "default":
+        # Inject site_id tag filter at end of pipeline — works for all Flux queries
+        # since tags survive every transformation step.
+        flux = flux.rstrip() + f'\n  |> filter(fn: (r) => r["site_id"] == "{site_id}")'
     client = get_client()
     query_api = client.query_api()
     tables = query_api.query(flux, org=settings.influxdb_org)

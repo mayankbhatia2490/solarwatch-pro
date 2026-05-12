@@ -50,14 +50,19 @@ from(bucket: "{BUCKET}")
                         r["_field"] == "shortwave_radiation_wm2")
   |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
   |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
-  |> filter(fn: (r) => r["expected_power_w"] > 200.0 and r["shortwave_radiation_wm2"] > 300.0)
+  |> filter(fn: (r) => r["expected_power_w"] > 200.0 and r["shortwave_radiation_wm2"] > 600.0)
 '''
     recs = query(flux)
 
-    # Bucket by calendar day
+    # Bucket by calendar day — restrict to 10AM-2PM IST (clear-sky peak window)
+    # This filters out dawn/dusk and partial-cloud hours that skew soiling estimates.
     daily: dict[str, list[float]] = {}
     for r in recs:
-        day = r.get_time().strftime("%Y-%m-%d")
+        # Convert UTC to IST (UTC+5:30) for hour filtering
+        ist_time = r.get_time() + timedelta(hours=5, minutes=30)
+        if not (10 <= ist_time.hour < 14):
+            continue
+        day = ist_time.strftime("%Y-%m-%d")
         actual   = r.values.get("power_now_w") or 0
         expected = r.values.get("expected_power_w") or 0
         if expected > 0:
@@ -67,7 +72,7 @@ from(bucket: "{BUCKET}")
     series = []
     for day_key in sorted(daily.keys()):
         vals = daily[day_key]
-        if len(vals) >= 3:  # require at least 3 clear-sky hours per day
+        if len(vals) >= 2:  # require at least 2 clear-sky peak hours per day
             series.append(round(sum(vals) / len(vals) * 100, 1))
 
     return series
@@ -94,13 +99,19 @@ def _analyze_soiling(series: list[float]) -> dict:
     Use efficiency time series to detect soiling trend.
     Returns: detected (bool), slope (%/day), current_eff, confidence, days_to_critical.
     """
-    if len(series) < 5:
+    if len(series) < 7:
         return {
             "detected": False,
+            "insufficient_data": True,
+            "data_days": len(series),
             "confidence": 0,
             "slope_pct_per_day": 0.0,
-            "current_efficiency_pct": None,
-            "message": "Insufficient data (need 5+ days of clear-sky readings)."
+            "current_efficiency_pct": series[-1] if series else None,
+            "message": (
+                f"Insufficient clear-sky data for soiling analysis "
+                f"({len(series)} days with radiation >600 W/m² in 10AM-2PM window; need 7+). "
+                f"Analysis will improve as more sunny days accumulate."
+            ),
         }
 
     slope = _linear_slope(series)  # % change per day

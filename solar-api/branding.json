@@ -1,0 +1,14 @@
+{
+  "app_name": "SolarWatch Pro",
+  "company_name": "SolarWatch",
+  "tagline": "Real-time solar intelligence",
+  "logo_url": "/logo.png",
+  "favicon_url": "/favicon.ico",
+  "primary_color": "#1B2B6B",
+  "accent_color": "#C9A84C",
+  "support_email": "support@solarwatch.pro",
+  "whatsapp_number": "",
+  "telegram_bot_name": "@Solarwatchpro_bot",
+  "distributor_name": "UHBVN",
+  "tariff_region": "Karnal, Haryana"
+}

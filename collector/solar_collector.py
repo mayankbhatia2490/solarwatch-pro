@@ -53,8 +53,10 @@ EMAIL_TO      = os.environ.get('EMAIL_TO')
 INSTALLED_CAPACITY_W  = float(os.environ.get('INSTALLED_CAPACITY_W', '3400'))
 ELECTRICITY_TARIFF_INR = float(os.environ.get('ELECTRICITY_TARIFF_INR', '6.5'))
 
-# KSY 5G-PRO+ temperature coefficient: -0.39%/°C (from datasheet)
-TEMP_COEFF_PER_C = -0.0039
+# Waaree monocrystalline panel Pmax temperature coefficient: -0.38%/°C
+# Source: Waaree WS series datasheet (standard mono range: -0.35% to -0.40%/°C)
+# Applies to panels, NOT the KSY inverter. Update if you have exact panel model datasheet.
+TEMP_COEFF_PER_C = -0.0038
 
 # Alerting State
 ALARM_STATE = {

@@ -4,8 +4,10 @@ Checks live InfluxDB data against thresholds and fires Telegram alerts.
 All thresholds match anomalies.py — no duplication.
 """
 import asyncio
+import json
 import logging
 from datetime import datetime, timezone, timedelta, date
+from pathlib import Path
 from influx import query
 from config import settings
 import telegram as tg
@@ -21,25 +23,42 @@ GRID_V_LOW     = 207.0  # V
 GRID_V_HIGH    = 253.0  # V
 FREQ_LOW       = 49.5   # Hz
 FREQ_HIGH      = 50.5   # Hz
-STRING_IMBAL   = 0.20   # 20% power deviation
 NEAR_ZERO_PCT  = 0.15   # <15% of expected = near-zero output alert
 
-DAILY_REPORT_HOUR_IST  = 7   # 7 AM IST
-WEEKLY_REPORT_WEEKDAY  = 6   # Sunday
-WEEKLY_REPORT_HOUR_IST = 8   # 8 AM IST
-MONTHLY_REPORT_DAY     = 1   # 1st of month
-MONTHLY_REPORT_HOUR_IST = 9  # 9 AM IST
+DAILY_REPORT_HOUR_IST   = 7   # 7 AM IST
+WEEKLY_REPORT_WEEKDAY   = 6   # Sunday
+WEEKLY_REPORT_HOUR_IST  = 8   # 8 AM IST
+MONTHLY_REPORT_DAY      = 1   # 1st of month
+MONTHLY_REPORT_HOUR_IST = 9   # 9 AM IST
 
 LAT = 29.6934
 LON = 76.9994
 
-# ── In-memory cooldowns ───────────────────────────────────────────────────────
-_cooldowns: dict[str, datetime] = {}
+# ── Persistent cooldowns — survive container restarts ─────────────────────────
+_COOLDOWN_FILE = Path("/app/data/alert_cooldowns.json")
+
+def _load_cooldowns() -> dict[str, float]:
+    try:
+        if _COOLDOWN_FILE.exists():
+            return json.loads(_COOLDOWN_FILE.read_text())
+    except Exception:
+        pass
+    return {}
+
+def _save_cooldowns(cooldowns: dict[str, float]) -> None:
+    try:
+        _COOLDOWN_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _COOLDOWN_FILE.write_text(json.dumps(cooldowns))
+    except Exception:
+        pass
 
 def _can_alert(key: str, cooldown_minutes: int = 60) -> bool:
-    last = _cooldowns.get(key)
-    if last is None or (datetime.now(timezone.utc) - last).total_seconds() > cooldown_minutes * 60:
-        _cooldowns[key] = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).timestamp()
+    cooldowns = _load_cooldowns()
+    last = cooldowns.get(key, 0)
+    if (now - last) > cooldown_minutes * 60:
+        cooldowns[key] = now
+        _save_cooldowns(cooldowns)
         return True
     return False
 
