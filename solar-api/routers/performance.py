@@ -22,8 +22,9 @@ def get_performance_data() -> Dict[str, Any]:
     days_old  = (now - install_date).days
     years_old = days_old / 365.25
 
-    # Standard Tier-1 panel degradation: 2% year 1, then 0.55%/year (per IEC 61215)
-    expected_deg = 2.0 + max(0, (years_old - 1) * 0.55) if years_old > 0 else 0
+    # Vikram Solar HyperSol warranty: 1% year 1, then 0.4%/year (30-year linear)
+    # Source: Vikram Solar datasheet VSL/ENG/SC/325-V02/STD performance warranty table
+    expected_deg = 1.0 + max(0, (years_old - 1) * 0.40) if years_old > 0 else 0
 
     # Actual degradation: compare first-month avg PR to current 30-day avg PR
     # This is a real measurement — not a formula ratio

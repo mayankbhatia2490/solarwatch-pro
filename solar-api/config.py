@@ -40,6 +40,14 @@ class Settings(BaseSettings):
     tariff_electricity_duty_pct: float = 5.0        # % of energy charges
     tariff_meter_rent_inr: float = 30.0             # ₹/month fixed
 
+    # ── Consumption baseline — used for UHBVN bill savings calculation ──────────
+    # Set to your actual monthly grid consumption from your electricity bill.
+    monthly_consumption_kwh: float = 600.0   # ₹/month household consumption
+
+    # ── Gemini AI — daily report analysis (free tier: 15 RPM, 1M tokens/day) ───
+    # Get a free key at: https://aistudio.google.com/app/apikey
+    gemini_api_key: str = ""
+
     class Config:
         env_file = ".env"
         extra = "ignore"

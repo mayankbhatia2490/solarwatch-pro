@@ -62,6 +62,66 @@ def _can_alert(key: str, cooldown_minutes: int = 60) -> bool:
         return True
     return False
 
+# ── WMO weather code → human description ─────────────────────────────────────
+_WMO = {
+    0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+    45: "Foggy", 48: "Icy fog",
+    51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle",
+    61: "Light rain", 63: "Rain", 65: "Heavy rain",
+    71: "Light snow", 73: "Snow", 75: "Heavy snow",
+    80: "Rain showers", 81: "Rain showers", 82: "Heavy showers",
+    95: "Thunderstorm", 96: "Thunderstorm", 99: "Thunderstorm + hail",
+}
+
+def _get_weather_summary() -> tuple[str, float]:
+    """Return (description e.g. 'Partly cloudy 38°C', temp_c) from Open-Meteo."""
+    try:
+        import urllib.request as _req, json as _json
+        url = (
+            f"https://api.open-meteo.com/v1/forecast"
+            f"?latitude={LAT}&longitude={LON}"
+            f"&current=temperature_2m,weather_code"
+            f"&timezone=Asia%2FKolkata"
+        )
+        with _req.urlopen(url, timeout=5) as resp:
+            data = _json.loads(resp.read())
+        cur  = data.get("current", {})
+        temp = float(cur.get("temperature_2m") or 0)
+        code = int(cur.get("weather_code") or 0)
+        desc = _WMO.get(code, "Clear")
+        return f"{desc} {temp:.0f}°C", temp
+    except Exception:
+        return "—", 35.0
+
+
+async def _gemini_analysis(kwh: float, pr_pct: float, health: int,
+                            weather_desc: str, temp_c: float) -> str:
+    """
+    Call Gemini for a 2-sentence daily performance insight.
+    Returns "" gracefully if API key missing or call fails.
+    """
+    key = settings.gemini_api_key
+    if not key:
+        return ""
+    try:
+        from google import genai as _genai
+        client = _genai.Client(api_key=key)
+        capacity_kw = settings.installed_capacity_w / 1000
+        prompt = (
+            f"My {capacity_kw:.1f}kW Vikram Solar N-type bifacial rooftop system in "
+            f"{settings.location_name} generated {kwh:.1f} kWh today "
+            f"(performance ratio {pr_pct:.0f}%, health score {health}/100). "
+            f"Weather: {weather_desc}, ambient {temp_c:.0f}°C. "
+            f"Give exactly 2 sentences: first on today's performance, second a practical tip. "
+            f"Be specific to Indian rooftop solar. No bullet points, no markdown."
+        )
+        resp = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
+        return resp.text.strip()
+    except Exception as e:
+        logger.warning(f"Gemini analysis failed: {e}")
+        return ""
+
+
 def _latest(field: str) -> float:
     flux = f'''
 from(bucket: "{BUCKET}")
@@ -275,46 +335,52 @@ async def maybe_send_daily_report():
     health      = _compute_live_health()
     co2         = round(energy * 0.82, 1)
 
-    # Real UHBVN slab-rate savings (assumes typical 20kWh/day household consumption)
-    assumed_daily_consumption_kwh = 20.0
+    # Real weather — live Open-Meteo call (used for description and Gemini context)
+    weather_desc, temp_c = _get_weather_summary()
+
+    # Real UHBVN slab-rate savings using configurable monthly consumption baseline
     monthly_gen  = energy * 30
-    monthly_cons = assumed_daily_consumption_kwh * 30
+    monthly_cons = settings.monthly_consumption_kwh
     bill_info    = solar_bill_savings(monthly_gen, monthly_cons)
     saved_inr    = round(bill_info["savings_inr"] / 30, 0)
     bill_without = round(bill_info["bill_without_solar_inr"] / 30, 0)
 
-    # Expected energy: sum of expected_power_w over today (stored in InfluxDB)
+    # Expected energy from stored expected_power_w (5-min samples → kWh)
     today_start = today.isoformat() + "T00:00:00Z"
     tomorrow    = (today + timedelta(days=1)).isoformat() + "T00:00:00Z"
     expected_kwh_raw = _sum_field_range("expected_power_w", today_start, tomorrow)
-    expected_kwh = round(expected_kwh_raw / 1000 / 12, 2)  # 5-min intervals → kWh
+    expected_kwh = round(expected_kwh_raw / 1000 / 12, 2)
     pr_pct = round(energy / expected_kwh * 100, 1) if expected_kwh > 0.5 else 0.0
 
-    # Approximate peak sun hours from daily kWh and installed capacity
-    capacity_kw  = settings.installed_capacity_w / 1000
-    sun_hours    = round(energy / (capacity_kw * 0.78), 1) if capacity_kw > 0 else 0.0
+    # Peak sun hours approximation
+    capacity_kw = settings.installed_capacity_w / 1000
+    sun_hours   = round(energy / (capacity_kw * 0.78), 1) if capacity_kw > 0 else 0.0
 
     # Payback progress
-    total_energy = _latest("total_energy_kwh")
+    total_energy  = _latest("total_energy_kwh")
     total_savings = round(total_energy * settings.electricity_tariff_inr, 0)
     payback_pct   = round(
         min(total_savings / settings.system_cost_inr * 100, 100), 1
     ) if settings.system_cost_inr > 0 else 0.0
 
+    # Gemini AI analysis — 1 call/day, fails gracefully if key not set
+    ai_text = await _gemini_analysis(energy, pr_pct, health, weather_desc, temp_c)
+
     msg = tg.format_daily_report(
-        date_str       = today.strftime("%d %b %Y"),
-        kwh            = energy,
-        expected_kwh   = expected_kwh,
-        pr_pct         = pr_pct,
-        saved_inr      = saved_inr,
+        date_str        = today.strftime("%d %b %Y"),
+        kwh             = energy,
+        expected_kwh    = expected_kwh,
+        pr_pct          = pr_pct,
+        saved_inr       = saved_inr,
         bill_without_inr = bill_without,
-        co2_kg         = co2,
-        health_score   = health,
-        weather_desc   = "—",
-        sun_hours      = sun_hours,
-        recovered_inr  = total_savings,
-        payback_pct    = payback_pct,
+        co2_kg          = co2,
+        health_score    = health,
+        weather_desc    = weather_desc,
+        sun_hours       = sun_hours,
+        recovered_inr   = total_savings,
+        payback_pct     = payback_pct,
         system_cost_inr = settings.system_cost_inr,
+        ai_analysis     = ai_text,
     )
     await tg.send_message(msg)
     logger.info("Daily Telegram report sent.")
