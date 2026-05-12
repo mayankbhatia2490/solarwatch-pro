@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from routers import (
     dashboard, electrical, notifications, grid, thermal,
     anomalies, maintenance, performance, weather, reports,
-    settings as settings_router, forecast, cleaning, sites, fleet,
+    settings as settings_router, forecast, cleaning, sites, fleet, export,
 )
 from influx import set_request_site_id
 from config import settings
@@ -55,6 +55,7 @@ app.include_router(forecast.router)
 app.include_router(cleaning.router)
 app.include_router(sites.router)
 app.include_router(fleet.router)
+app.include_router(export.router)
 
 @app.get("/health")
 async def health():

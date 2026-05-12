@@ -40,7 +40,7 @@ export default function SettingsPage() {
   useEffect(() => {
     async function loadSettings() {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090"}/api/settings`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? ""}/api/settings`);
         if (res.ok) {
           const data = await res.json();
           setForm(f => ({
@@ -69,7 +69,7 @@ export default function SettingsPage() {
     setTheme(form.theme);
     
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090"}/api/settings`, {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? ""}/api/settings`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -224,11 +224,11 @@ export default function SettingsPage() {
           <h2 className="font-semibold text-white">Data & Export</h2>
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
-          <a href={`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090"}/api/export/csv`}
+          <a href={`${process.env.NEXT_PUBLIC_API_URL ?? ""}/api/export/csv`}
             className="flex-1 text-center px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 text-sm font-medium transition-all">
             📥 Export All Data (CSV)
           </a>
-          <a href={`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090"}/docs`} target="_blank" rel="noreferrer"
+          <a href={`${process.env.NEXT_PUBLIC_API_URL ?? ""}/docs`} target="_blank" rel="noreferrer"
             className="flex-1 text-center px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 text-sm font-medium transition-all">
             📖 API Documentation
           </a>

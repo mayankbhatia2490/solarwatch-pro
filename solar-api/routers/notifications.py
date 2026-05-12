@@ -8,6 +8,7 @@ router = APIRouter()
 class TelegramConfig(BaseModel):
     chat_id: str
 
+@router.get("/detect-chat-id")
 @router.get("/chat-id")
 async def auto_detect_chat_id():
     """Auto-detect chat ID from first message sent to bot"""

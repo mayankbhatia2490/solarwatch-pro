@@ -12,7 +12,7 @@ export default function ReportsPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090"}/api/reports`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? ""}/api/reports`);
         if (res.ok) {
           const json = await res.json();
           setData(json.data);
@@ -30,7 +30,7 @@ export default function ReportsPage() {
     setTriggering(true);
     setMessage("");
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090"}/api/reports/generate?report_type=${type}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? ""}/api/reports/generate?report_type=${type}`, {
         method: 'POST'
       });
       if (res.ok) {

@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { GitCompare, TrendingUp, TrendingDown, Minus } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090";
+const API = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 interface StringData {
   pv1_voltage: number; pv1_current: number; pv1_power: number;

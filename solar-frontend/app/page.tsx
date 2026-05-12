@@ -252,7 +252,7 @@ export default function Dashboard() {
 
   const loadLivePower = useCallback(async () => {
     try {
-      const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090";
+      const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
       const res = await fetch(`${API_BASE}/api/dashboard/summary`, { cache: "no-store" });
       if (res.ok) {
         const d = await res.json();

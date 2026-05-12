@@ -13,7 +13,7 @@ export default function ThermalPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090"}/api/thermal/history?hours=24`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? ""}/api/thermal/history?hours=24`);
         if (res.ok) {
           const json = await res.json();
           setData(json.data || []);

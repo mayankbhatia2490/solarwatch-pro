@@ -13,7 +13,7 @@ export default function PerformancePage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090"}/api/performance`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? ""}/api/performance`);
         if (res.ok) {
           const json = await res.json();
           setData(json.data);

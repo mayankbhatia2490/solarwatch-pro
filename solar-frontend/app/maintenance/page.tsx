@@ -10,7 +10,7 @@ export default function MaintenancePage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090"}/api/maintenance`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? ""}/api/maintenance`);
         if (res.ok) {
           const json = await res.json();
           setData(json.data);

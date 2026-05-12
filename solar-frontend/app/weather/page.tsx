@@ -10,7 +10,7 @@ export default function WeatherPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090"}/api/weather`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? ""}/api/weather`);
         if (res.ok) {
           const json = await res.json();
           setData(json);
@@ -145,7 +145,7 @@ export default function WeatherPage() {
       {/* Power Potential vs Actual */}
       <div className="themed-card p-6 border-l-4 border-l-emerald-500">
         <h2 className="text-xl font-bold mb-1">Power Potential vs Actual</h2>
-        <p className="text-sm text-[var(--text-muted)] mb-5">Based on KSY 5G-PRO+ {capacity_kw}kW inverter · PR={pr}% · Location: Karnal</p>
+        <p className="text-sm text-[var(--text-muted)] mb-5">Based on KSY 3.4kW-1Ph {capacity_kw}kW inverter · PR={pr}% · Location: Karnal</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-[var(--bg-hover)] p-4 rounded-xl">
             <div className="text-sm text-[var(--text-secondary)] mb-1">Total Irradiance</div>
