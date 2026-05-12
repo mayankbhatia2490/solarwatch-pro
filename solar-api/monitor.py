@@ -9,7 +9,7 @@ import logging
 from datetime import datetime, timezone, timedelta, date
 from pathlib import Path
 from influx import query
-from config import settings
+from config import settings, solar_bill_savings
 import telegram as tg
 
 logger = logging.getLogger(__name__)
@@ -251,37 +251,9 @@ async def check_output():
             ))
 
 async def check_string_imbalance():
-    """Power-based imbalance (voltage × current) — catches soiling before voltage drops."""
-    pv1_v = _latest("pv1_voltage")
-    pv1_a = _latest("pv1_current")
-    pv2_v = _latest("pv2_voltage")
-    pv2_a = _latest("pv2_current")
-
-    pv1_power = pv1_v * pv1_a
-    pv2_power = pv2_v * pv2_a
-
-    if pv1_power <= 50 or pv2_power <= 50 or not _is_daytime():
-        return
-
-    max_power = max(pv1_power, pv2_power)
-    deviation = abs(pv1_power - pv2_power) / max_power
-
-    if deviation > STRING_IMBAL and _can_alert("string_imbal", 240):
-        weaker  = "String 1" if pv1_power < pv2_power else "String 2"
-        weaker_w  = min(pv1_power, pv2_power)
-        stronger_w = max(pv1_power, pv2_power)
-        tariff = settings.electricity_tariff_inr
-        lost_inr_hr = round((stronger_w - weaker_w) / 1000 * tariff, 0)
-
-        await tg.send_message(tg.format_alert(
-            f"⚡ String Power Imbalance — {deviation*100:.0f}% Deviation",
-            f"String 1: <b>{pv1_power:.0f}W</b> ({pv1_v:.0f}V × {pv1_a:.1f}A)\n"
-            f"String 2: <b>{pv2_power:.0f}W</b> ({pv2_v:.0f}V × {pv2_a:.1f}A)\n"
-            f"<b>{weaker}</b> is underperforming by {deviation*100:.0f}%.\n"
-            f"Estimated loss: ₹{lost_inr_hr}/hour.\n"
-            f"Check {weaker} for soiling, shading, or loose MC4 connector.",
-            severity="warning"
-        ))
+    # KSY 3.4kW-1Ph has 1 MPPT and 1 PV string — no second string to compare against.
+    # Function retained as a no-op so the monitor loop doesn't need to change.
+    pass
 
 
 # ── Scheduled reports ─────────────────────────────────────────────────────────
@@ -299,14 +271,51 @@ async def maybe_send_daily_report():
         return
     _last_daily_report = ist_now
 
-    power       = _latest("power_now_w")
     energy      = _latest("daily_energy_kwh")
-    tariff      = settings.electricity_tariff_inr
-    savings     = round(energy * tariff, 0)
+    health      = _compute_live_health()
     co2         = round(energy * 0.82, 1)
-    health      = _compute_live_health()  # Real health score, not 90 placeholder
 
-    msg = tg.format_daily_report(power, energy, savings, health, co2, tariff)
+    # Real UHBVN slab-rate savings (assumes typical 20kWh/day household consumption)
+    assumed_daily_consumption_kwh = 20.0
+    monthly_gen  = energy * 30
+    monthly_cons = assumed_daily_consumption_kwh * 30
+    bill_info    = solar_bill_savings(monthly_gen, monthly_cons)
+    saved_inr    = round(bill_info["savings_inr"] / 30, 0)
+    bill_without = round(bill_info["bill_without_solar_inr"] / 30, 0)
+
+    # Expected energy: sum of expected_power_w over today (stored in InfluxDB)
+    today_start = today.isoformat() + "T00:00:00Z"
+    tomorrow    = (today + timedelta(days=1)).isoformat() + "T00:00:00Z"
+    expected_kwh_raw = _sum_field_range("expected_power_w", today_start, tomorrow)
+    expected_kwh = round(expected_kwh_raw / 1000 / 12, 2)  # 5-min intervals → kWh
+    pr_pct = round(energy / expected_kwh * 100, 1) if expected_kwh > 0.5 else 0.0
+
+    # Approximate peak sun hours from daily kWh and installed capacity
+    capacity_kw  = settings.installed_capacity_w / 1000
+    sun_hours    = round(energy / (capacity_kw * 0.78), 1) if capacity_kw > 0 else 0.0
+
+    # Payback progress
+    total_energy = _latest("total_energy_kwh")
+    total_savings = round(total_energy * settings.electricity_tariff_inr, 0)
+    payback_pct   = round(
+        min(total_savings / settings.system_cost_inr * 100, 100), 1
+    ) if settings.system_cost_inr > 0 else 0.0
+
+    msg = tg.format_daily_report(
+        date_str       = today.strftime("%d %b %Y"),
+        kwh            = energy,
+        expected_kwh   = expected_kwh,
+        pr_pct         = pr_pct,
+        saved_inr      = saved_inr,
+        bill_without_inr = bill_without,
+        co2_kg         = co2,
+        health_score   = health,
+        weather_desc   = "—",
+        sun_hours      = sun_hours,
+        recovered_inr  = total_savings,
+        payback_pct    = payback_pct,
+        system_cost_inr = settings.system_cost_inr,
+    )
     await tg.send_message(msg)
     logger.info("Daily Telegram report sent.")
 
@@ -328,14 +337,26 @@ async def maybe_send_weekly_report():
     savings = round(energy * settings.electricity_tariff_inr, 0)
     co2     = round(energy * 0.82, 1)
 
-    msg = (
-        f"📊 <b>Weekly Solar Summary</b>\n\n"
-        f"🗓 <b>Week ending:</b> {today.strftime('%d %b %Y')}\n"
-        f"⚡ <b>Total Generation:</b> {energy:.1f} kWh\n"
-        f"💰 <b>Estimated Savings:</b> ₹{savings:.0f}\n"
-        f"🌿 <b>CO₂ Offset:</b> {co2} kg\n"
-        f"🏥 <b>System Health:</b> {_compute_live_health()}/100\n\n"
-        f"<i>SolarWatch Pro • 7-day actual generation</i>"
+    # Best single day in the week
+    best_day_flux = f'''
+from(bucket: "{BUCKET}")
+  |> range(start: {start_}, stop: {stop_})
+  |> filter(fn: (r) => r["_field"] == "daily_energy_kwh")
+  |> aggregateWindow(every: 1d, fn: max, createEmpty: false)
+  |> max()
+'''
+    best_recs   = query(best_day_flux)
+    best_day    = float(best_recs[0].get_value()) if best_recs else 0.0
+    avg_health  = float(_compute_live_health())
+
+    date_range = f"{(today - timedelta(days=6)).strftime('%d %b')}–{today.strftime('%d %b %Y')}"
+    msg = tg.format_weekly_report(
+        date_range   = date_range,
+        kwh          = energy,
+        savings_inr  = savings,
+        co2_kg       = co2,
+        avg_health   = avg_health,
+        best_day_kwh = best_day,
     )
     await tg.send_message(msg)
     logger.info("Weekly Telegram report sent.")
@@ -363,23 +384,25 @@ async def maybe_send_monthly_report():
     co2     = round(energy * 0.82, 1)
     trees   = round(co2 / 21, 1)
 
-    install_date = datetime.fromisoformat(settings.installation_date)
-    total_energy = _latest("total_energy_kwh")
+    total_energy  = _latest("total_energy_kwh")
     total_savings = round(total_energy * settings.electricity_tariff_inr, 0)
     payback_pct   = round(
         min(total_savings / settings.system_cost_inr * 100, 100), 1
     ) if settings.system_cost_inr > 0 else 0
 
-    msg = (
-        f"📈 <b>Monthly Performance Report</b>\n\n"
-        f"🗓 <b>Month:</b> {prev_month_start.strftime('%B %Y')}\n"
-        f"⚡ <b>Total Generation:</b> {energy:.1f} kWh\n"
-        f"💰 <b>Savings This Month:</b> ₹{savings:.0f}\n"
-        f"🌿 <b>CO₂ Offset:</b> {co2} kg ({trees} trees)\n"
-        f"🏥 <b>System Health:</b> {_compute_live_health()}/100\n\n"
-        f"📊 <b>Investment Recovery:</b> {payback_pct}% of ₹{settings.system_cost_inr:,.0f}\n"
-        f"💵 <b>Total Savings to Date:</b> ₹{total_savings:,.0f}\n\n"
-        f"<i>SolarWatch Pro • Actual InfluxDB data</i>"
+    # Real UHBVN bill savings for the month (assumes 600 kWh/month household consumption)
+    bill_info    = solar_bill_savings(energy, 600.0)
+    savings_real = bill_info["savings_inr"]
+    bill_without = bill_info["bill_without_solar_inr"]
+
+    msg = tg.format_monthly_report(
+        month_str       = prev_month_start.strftime("%B %Y"),
+        kwh             = energy,
+        savings_inr     = savings_real,
+        bill_without_inr = bill_without,
+        co2_kg          = co2,
+        payback_pct     = payback_pct,
+        system_cost_inr = settings.system_cost_inr,
     )
     await tg.send_message(msg)
     logger.info("Monthly Telegram report sent.")
