@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     installed_capacity_w: float = 3570.0  # 6 × Vikram Solar HyperSol 595W STC
     electricity_tariff_inr: float = 6.5
-    system_cost_inr: float = 220000.0
+    system_cost_inr: float = 190000.0
     installation_date: str = "2025-04-17"
     plant_name: str = "My Solar System"
     latitude: str = "29.693405600010355"
