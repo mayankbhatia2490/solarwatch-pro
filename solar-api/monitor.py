@@ -66,19 +66,67 @@ from(bucket: "{BUCKET}")
     return float(recs[0].get_value()) if recs else 0.0
 
 def _compute_live_health() -> int:
-    """Compute real health score from current readings."""
+    """
+    Compute real health score 0-100 from live readings.
+    Deductions: grid voltage (all 3 phases), temperature, string balance, PR.
+    """
     score = 100
-    gv   = _latest("grid_r_voltage")
+
+    # Grid voltage — all 3 phases
+    for field in ("grid_r_voltage", "grid_s_voltage", "grid_t_voltage"):
+        v = _latest(field)
+        if v > 0:
+            if v < 207 or v > 253:
+                score -= 15
+            elif v < 215 or v > 245:
+                score -= 5
+
+    # Phase imbalance (R vs S vs T)
+    r = _latest("grid_r_voltage")
+    s = _latest("grid_s_voltage")
+    t = _latest("grid_t_voltage")
+    if all(x > 100 for x in (r, s, t)):
+        avg = (r + s + t) / 3
+        max_dev = max(abs(r - avg), abs(s - avg), abs(t - avg))
+        imbalance_pct = (max_dev / avg) * 100
+        if imbalance_pct > 5.0:
+            score -= 15
+        elif imbalance_pct > 3.0:
+            score -= 8
+
+    # Heatsink temperature
     temp = _latest("internal_radiator_temperature")
+    if temp > 85:
+        score -= 30
+    elif temp > 75:
+        score -= 15
+
+    # String power imbalance
+    pv1_w = _latest("pv1_voltage") * _latest("pv1_current")
+    pv2_w = _latest("pv2_voltage") * _latest("pv2_current")
+    if pv1_w > 50 and pv2_w > 50:
+        max_w = max(pv1_w, pv2_w)
+        imb = abs(pv1_w - pv2_w) / max_w
+        if imb > 0.20:
+            score -= 15
+        elif imb > 0.10:
+            score -= 8
+
+    # Performance ratio during daylight
+    if _is_daytime():
+        power    = _latest("power_now_w")
+        expected = _latest("expected_power_w")
+        if expected > 200:
+            pr = power / expected
+            if pr < 0.60:
+                score -= 15
+            elif pr < 0.80:
+                score -= 5
+
+    # PV1 absent while online
     pv1v = _latest("pv1_voltage")
     stat = int(_latest("status_code"))
-
-    if gv > 0:
-        if gv < 207 or gv > 253:  score -= 20
-        elif gv < 215 or gv > 245: score -= 10
-    if temp > 85:   score -= 30
-    elif temp > 75: score -= 15
-    if pv1v < 50 and stat == 0:
+    if pv1v < 50 and stat == 0 and _is_daytime():
         score -= 15
 
     return max(0, score)
