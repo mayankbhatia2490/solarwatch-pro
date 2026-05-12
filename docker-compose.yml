@@ -132,3 +132,22 @@ services:
     depends_on:
       - solar-frontend
       - solar-api
+
+  # ── JupyterLab — ML analysis & forecasting ────────────────────────────────────
+  jupyter:
+    image: quay.io/jupyter/scipy-notebook:latest
+    container_name: solar-jupyter
+    restart: unless-stopped
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./notebooks:/home/jovyan/work
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+      - JUPYTER_TOKEN=${JUPYTER_TOKEN:-solar123}
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
+      - INFLUXDB_ORG=${INFLUXDB_ORG:-solar}
+      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET:-solar_metrics}
+    depends_on:
+      - influxdb
