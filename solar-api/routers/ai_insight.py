@@ -20,7 +20,8 @@ CAPACITY_W = settings.installed_capacity_w
 DESIGN_PR  = 0.78
 TEMP_WARN  = 65.0
 
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+def _gemini_url() -> str:
+    return f"https://generativelanguage.googleapis.com/v1beta/models/{settings.gemini_model}:generateContent"
 
 
 def _build_context(days: int) -> dict:
@@ -259,7 +260,7 @@ async def get_ai_insight(days: int = 30) -> Dict[str, Any]:
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
-                f"{GEMINI_URL}?key={settings.gemini_api_key}",
+                f"{_gemini_url()}?key={settings.gemini_api_key}",
                 json=payload,
             )
             if resp.status_code == 400:
@@ -415,7 +416,7 @@ async def _call_gemini_json(prompt: str) -> list:
 
     async with httpx.AsyncClient(timeout=35) as client:
         resp = await client.post(
-            f"{GEMINI_URL}?key={settings.gemini_api_key}",
+            f"{_gemini_url()}?key={settings.gemini_api_key}",
             json=payload,
         )
         if resp.status_code == 403:
