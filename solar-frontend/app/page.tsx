@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Sun, Zap, IndianRupee, Leaf, Activity, Thermometer, Wind, Cloud, RefreshCw, TrendingUp, AlertCircle, CheckCircle, AlertTriangle, Calendar } from "lucide-react";
 import { GenerationChart } from "@/components/generation-chart";
+import { SmartSuggestions } from "@/components/smart-suggestions";
 import { fetchDashboardSummary, fetchDailyChart, fetchHealthScorecard } from "@/lib/api";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -380,6 +381,9 @@ export default function Dashboard() {
           ))}
         </div>
       </div>
+
+      {/* AI Smart Suggestions */}
+      <SmartSuggestions />
 
       {/* Environmental + Payback */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

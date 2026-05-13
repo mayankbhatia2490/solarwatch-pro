@@ -288,3 +288,201 @@ async def get_ai_insight(days: int = 30) -> Dict[str, Any]:
         "ai_report": ai_text,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+# ── Suggestions endpoint ──────────────────────────────────────────────────────
+
+def _get_current_readings() -> dict:
+    """Fetch the last 24h averages and today's peak for context."""
+    flux = f'''
+from(bucket: "{BUCKET}")
+  |> range(start: -24h)
+  |> filter(fn: (r) =>
+      r["_field"] == "power_now_w" or
+      r["_field"] == "expected_power_w" or
+      r["_field"] == "internal_radiator_temperature" or
+      r["_field"] == "pv1_voltage" or
+      r["_field"] == "shortwave_radiation_wm2")
+  |> filter(fn: (r) => r["_value"] > 0)
+  |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+'''
+    recs = query(flux)
+
+    temps, actual_powers, expected_powers, radiations = [], [], [], []
+    peak_power = 0.0
+
+    for r in recs:
+        t_val  = float(r.values.get("internal_radiator_temperature") or 0)
+        a_val  = float(r.values.get("power_now_w") or 0)
+        e_val  = float(r.values.get("expected_power_w") or 0)
+        rad    = float(r.values.get("shortwave_radiation_wm2") or 0)
+        if t_val > 0: temps.append(t_val)
+        if a_val > 0: actual_powers.append(a_val); peak_power = max(peak_power, a_val)
+        if e_val > 50: expected_powers.append(e_val)
+        if rad > 0: radiations.append(rad)
+
+    avg_temp    = round(sum(temps) / len(temps), 1)        if temps          else None
+    max_temp    = round(max(temps), 1)                     if temps          else None
+    pr_24h      = round(sum(actual_powers) / sum(expected_powers) * 100, 1) \
+                  if expected_powers and sum(expected_powers) > 0 else None
+    avg_rad     = round(sum(radiations) / len(radiations)) if radiations     else None
+
+    return {
+        "avg_inverter_temp_c":  avg_temp,
+        "max_inverter_temp_c":  max_temp,
+        "peak_power_w":         round(peak_power),
+        "capacity_w":           CAPACITY_W,
+        "peak_capacity_pct":    round(peak_power / CAPACITY_W * 100, 1) if peak_power else 0,
+        "pr_24h_pct":           pr_24h,
+        "avg_radiation_wm2":    avg_rad,
+    }
+
+
+def _build_suggestions_prompt(readings: dict, pr_30d: float | None,
+                               hot_days_30d: int, days_since_clean: int) -> str:
+    temp_str = (
+        f"avg {readings['avg_inverter_temp_c']}°C, peak {readings['max_inverter_temp_c']}°C (last 24h)"
+        if readings["avg_inverter_temp_c"] else "no temperature data"
+    )
+    peak_str = (
+        f"{readings['peak_power_w']}W — {readings['peak_capacity_pct']}% of {int(CAPACITY_W)}W capacity"
+        if readings["peak_power_w"] else "no power data"
+    )
+
+    return f"""You are a solar energy optimization consultant for a residential rooftop system in Karnal, Haryana, India.
+
+SYSTEM:
+- Inverter: KSY 3.4kW-1Ph (single-phase, single MPPT)
+- Panels: 6 × Vikram Solar HyperSol 595W = 3,570W DC total
+- Location: Karnal, Haryana (hot semi-arid, very dusty summers, monsoon Jul-Sep)
+- Installation: April 2025
+- Electricity tariff: ₹6.50/unit (UHBVN)
+
+CURRENT SENSOR DATA:
+- Inverter temperature: {temp_str}
+- Peak power output (last 24h): {peak_str}
+- 24h Performance Ratio: {readings['pr_24h_pct']}%
+- 30-day PR: {pr_30d}%
+- Days with inverter >65°C in last 30 days: {hot_days_30d}
+- Days since last panel cleaning: {days_since_clean}
+- Avg solar irradiance (last 24h): {readings['avg_radiation_wm2']} W/m²
+
+TASK:
+Generate a JSON array of improvement suggestions tailored to this system and its current data.
+Each suggestion should be a physical or operational change the homeowner can actually make.
+
+Focus areas (cover all that are relevant based on the data):
+1. Cooling the panels/inverter (white roof paint, ventilation gaps, shade cloth on inverter, etc.)
+2. Panel soiling / cleaning schedule
+3. Inverter placement and airflow
+4. Wiring or connection losses
+5. Seasonal optimisation (tilt angle for winter/summer, pre-monsoon cleaning)
+6. Any other improvement relevant to this specific data
+
+For EACH suggestion output exactly this JSON structure:
+{{
+  "rank": <1-based priority>,
+  "category": "<thermal|soiling|shading|wiring|seasonal|operational>",
+  "title": "<short name, max 6 words>",
+  "problem": "<1 sentence: what sensor data shows the problem>",
+  "solution": "<2 sentences: exactly what to do>",
+  "expected_gain_pct": <realistic PR gain in %, number only>,
+  "expected_gain_kwh_monthly": <number, based on 3.57kW system, 5h peak sun/day>,
+  "expected_gain_inr_monthly": <number, at ₹6.50/unit>,
+  "cost_inr": <realistic Indian market cost, number only>,
+  "payback_months": <cost / monthly_gain rounded to integer>,
+  "effort": "<easy|medium|complex>",
+  "diy": <true if homeowner can do it themselves, false if needs professional>,
+  "season": "<best season to implement, e.g. 'Before summer (March)' or 'Any time'>"
+}}
+
+Return ONLY a valid JSON array, no markdown, no explanation, no code fences. Start directly with [."""
+
+
+async def _call_gemini_json(prompt: str) -> list:
+    """Call Gemini and parse the JSON array response."""
+    import json as _json
+
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0.2,
+            "maxOutputTokens": 2048,
+            "topP": 0.8,
+        },
+    }
+
+    async with httpx.AsyncClient(timeout=35) as client:
+        resp = await client.post(
+            f"{GEMINI_URL}?key={settings.gemini_api_key}",
+            json=payload,
+        )
+        if resp.status_code == 403:
+            raise HTTPException(status_code=403, detail="Gemini API key invalid or quota exceeded.")
+        resp.raise_for_status()
+        result = resp.json()
+
+    raw = result["candidates"][0]["content"]["parts"][0]["text"].strip()
+    # Strip any accidental markdown fences Gemini adds despite instructions
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+
+    return _json.loads(raw)
+
+
+@router.get("/suggestions")
+async def get_ai_suggestions() -> Dict[str, Any]:
+    """
+    Returns a table of AI-generated improvement suggestions for the dashboard.
+    Each row has problem, solution, expected gain (kWh + ₹/month), cost, payback.
+    Backed by real-time inverter temperature, PR, and cleaning data.
+    Requires GEMINI_API_KEY.
+    """
+    if not settings.gemini_api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Gemini API key not configured. Add GEMINI_API_KEY to .env file.",
+        )
+
+    from pathlib import Path
+    import json as _json
+
+    # Current readings
+    readings = _get_current_readings()
+
+    # 30-day PR and hot days from the full context
+    ctx_30 = _build_context(30)
+    pr_30d    = ctx_30["summary"]["overall_pr_pct"]
+    hot_days  = ctx_30["summary"]["hot_days"]
+
+    # Days since last clean
+    cleaning_log_path = Path("/app/data/cleaning_log.json")
+    days_since_clean = 999
+    try:
+        if cleaning_log_path.exists():
+            log = _json.loads(cleaning_log_path.read_text())
+            if log:
+                from datetime import date
+                last = max(log, key=lambda e: e["date"])["date"]
+                days_since_clean = (date.today() - date.fromisoformat(last)).days
+    except Exception:
+        pass
+
+    prompt = _build_suggestions_prompt(readings, pr_30d, hot_days, days_since_clean)
+
+    try:
+        suggestions = await _call_gemini_json(prompt)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Gemini error: {e}")
+
+    return {
+        "status":       "success",
+        "model":        "gemini-1.5-flash",
+        "context":      {**readings, "pr_30d_pct": pr_30d, "hot_days_30d": hot_days,
+                         "days_since_clean": days_since_clean},
+        "suggestions":  suggestions,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
