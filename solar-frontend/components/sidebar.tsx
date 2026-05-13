@@ -1,24 +1,16 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Sun, Zap, GitBranch, AlertTriangle, Grid, Thermometer, Wrench, TrendingUp, Cloud, FileText, Bell, Settings, Menu, X, Moon, BarChart2 } from "lucide-react";
+import { Sun, Activity, TrendingUp, Wrench, Settings, Menu, X, Moon } from "lucide-react";
 import { useState } from "react";
 import { useTheme } from "next-themes";
 
 const nav = [
-  { href: "/", label: "Dashboard", icon: Sun },
-  { href: "/electrical", label: "Electrical", icon: Zap },
-  { href: "/strings", label: "String Compare", icon: GitBranch },
-  { href: "/anomalies", label: "Anomalies", icon: AlertTriangle },
-  { href: "/grid", label: "Grid Quality", icon: Grid },
-  { href: "/thermal", label: "Thermal", icon: Thermometer },
-  { href: "/maintenance", label: "Maintenance", icon: Wrench },
-  { href: "/analysis",   label: "Performance Analysis", icon: BarChart2 },
-  { href: "/performance", label: "Performance", icon: TrendingUp },
-  { href: "/weather", label: "Weather Context", icon: Cloud },
-  { href: "/reports", label: "Reports", icon: FileText },
-  { href: "/alerts", label: "Alert Config", icon: Bell },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/",            label: "Dashboard",    icon: Sun },
+  { href: "/monitor",     label: "Live Monitor", icon: Activity },
+  { href: "/performance", label: "Performance",  icon: TrendingUp },
+  { href: "/maintenance", label: "Maintenance",  icon: Wrench },
+  { href: "/settings",    label: "Settings",     icon: Settings },
 ];
 
 export function Sidebar() {

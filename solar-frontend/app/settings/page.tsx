@@ -2,6 +2,8 @@
 import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { Settings, Zap, IndianRupee, Palette, Save, CheckCircle, Loader2 } from "lucide-react";
+import { PageTabs, TabPanel } from "@/components/page-tabs";
+import AlertsPage from "@/app/alerts/page";
 
 function Field({ label, id, type = "text", value, onChange, unit, hint }: {
   label: string; id: string; type?: string; value: string;
@@ -20,7 +22,7 @@ function Field({ label, id, type = "text", value, onChange, unit, hint }: {
   );
 }
 
-export default function SettingsPage() {
+function SystemSettings() {
   const { theme: currentTheme, setTheme } = useTheme();
   const [saved, setSaved] = useState(false);
   const [form, setForm] = useState({
@@ -67,7 +69,6 @@ export default function SettingsPage() {
   const handleSave = async () => {
     setSaving(true);
     setTheme(form.theme);
-    
     try {
       await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? ""}/api/settings`, {
         method: 'PATCH',
@@ -90,7 +91,6 @@ export default function SettingsPage() {
     }
   };
 
-
   const systemAge = () => {
     const install = new Date(form.installDate);
     const now = new Date();
@@ -102,7 +102,7 @@ export default function SettingsPage() {
     const cost = parseFloat(form.systemCost) || 0;
     const tariff = parseFloat(form.tariff) || 6.5;
     const cap = parseFloat(form.capacity) || 3500;
-    const dailyKwh = (cap / 1000) * 4.5; // avg 4.5 sun hours
+    const dailyKwh = (cap / 1000) * 4.5;
     const dailySavings = dailyKwh * tariff;
     const years = cost / (dailySavings * 365);
     return years.toFixed(1);
@@ -117,12 +117,8 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl mx-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Settings</h1>
-          <p className="text-slate-400 text-sm mt-1">System configuration and preferences</p>
-        </div>
+    <div className="space-y-6 max-w-2xl">
+      <div className="flex items-center justify-end">
         <button onClick={handleSave} disabled={saving}
           className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all disabled:opacity-50 ${saved ? "bg-emerald-600 text-white" : "bg-emerald-500 hover:bg-emerald-400 text-white"}`}>
           {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : saved ? <><CheckCircle className="w-4 h-4" /> Saved!</> : <><Save className="w-4 h-4" /> Save Changes</>}
@@ -144,7 +140,6 @@ export default function SettingsPage() {
           hint="Total peak DC capacity of your panels" />
         <Field label="Timezone" id="timezone" value={form.timezone} onChange={set("timezone")} hint="Used for chart time axes" />
 
-        {/* Read-only system stats */}
         <div className="grid grid-cols-2 gap-3 pt-2">
           {[
             { label: "Inverter", value: "ShineMonitor API" },
@@ -173,7 +168,6 @@ export default function SettingsPage() {
         <Field label="System Cost" id="systemCost" type="number" value={form.systemCost} onChange={set("systemCost")} unit="₹"
           hint="Total installation cost — used for payback calculation" />
 
-        {/* Payback preview */}
         <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4">
           <p className="text-amber-400 text-sm font-medium">Estimated payback period</p>
           <p className="text-white text-2xl font-bold mt-1">{estimatedPayback()} years</p>
@@ -235,6 +229,32 @@ export default function SettingsPage() {
         </div>
         <p className="text-slate-500 text-xs mt-3 text-center">Data stored in InfluxDB · Collection every 5 min · Retention: unlimited</p>
       </div>
+    </div>
+  );
+}
+
+const TABS = [
+  { id: "system",  label: "System",         icon: "⚙️" },
+  { id: "alerts",  label: "Alert Config",   icon: "🔔" },
+];
+
+export default function SettingsPage() {
+  const [active, setActive] = useState("system");
+
+  return (
+    <div className="space-y-5 max-w-4xl">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: "var(--card-value)" }}>Settings</h1>
+          <p className="text-sm mt-0.5" style={{ color: "var(--card-sub)" }}>
+            System configuration · display preferences · alert channels
+          </p>
+        </div>
+        <PageTabs tabs={TABS} active={active} onChange={setActive} />
+      </div>
+
+      <TabPanel id="system"  active={active}><SystemSettings /></TabPanel>
+      <TabPanel id="alerts"  active={active}><AlertsPage /></TabPanel>
     </div>
   );
 }
