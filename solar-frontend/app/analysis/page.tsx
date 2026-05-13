@@ -178,26 +178,6 @@ export default function AnalysisPage() {
     },
   };
 
-  // ── Generation donut chart ────────────────────────────────────────────────
-  const lostKwh   = Math.max(s.total_expected_kwh - s.total_actual_kwh, 0);
-  const donutSeries  = [s.total_actual_kwh, lostKwh > 0 ? lostKwh : 0];
-  const donutOptions: any = {
-    chart: { type: "donut", background: "transparent" },
-    theme: { mode: isDark ? "dark" : "light" },
-    labels: ["Actual generated", "Unrealised (gap)"],
-    colors: ["#22c55e", "#f59e0b"],
-    dataLabels: { enabled: false },
-    legend: { labels: { colors: isDark ? "#f1f5f9" : "#334155" }, position: "bottom" },
-    plotOptions: { pie: { donut: { size: "65%",
-      labels: { show: true, total: {
-        show: true, label: "PR",
-        formatter: () => `${s.overall_pr_pct}%`,
-        color: isDark ? "#f1f5f9" : "#334155",
-      }},
-    }}},
-    tooltip: { y: { formatter: (v: number) => `${v.toFixed(1)} kWh` } },
-  };
-
   // ── Hour profile bar chart ────────────────────────────────────────────────
   const hourSeries = data ? [
     { name: "Expected", data: data.hourly_profile.map((h: any) => h.avg_expected_w) },
@@ -241,6 +221,26 @@ export default function AnalysisPage() {
   const s = data.summary;
   const prVsDesign = s.overall_pr_pct - s.design_pr_pct;
   const prColor = prVsDesign >= 0 ? "text-emerald-500" : prVsDesign >= -8 ? "text-amber-500" : "text-red-500";
+
+  // ── Generation donut chart ────────────────────────────────────────────────
+  const lostKwh = Math.max(s.total_expected_kwh - s.total_actual_kwh, 0);
+  const donutSeries = [s.total_actual_kwh, lostKwh > 0 ? lostKwh : 0];
+  const donutOptions: any = {
+    chart: { type: "donut", background: "transparent" },
+    theme: { mode: isDark ? "dark" : "light" },
+    labels: ["Actual generated", "Unrealised (gap)"],
+    colors: ["#22c55e", "#f59e0b"],
+    dataLabels: { enabled: false },
+    legend: { labels: { colors: isDark ? "#f1f5f9" : "#334155" }, position: "bottom" },
+    plotOptions: { pie: { donut: { size: "65%",
+      labels: { show: true, total: {
+        show: true, label: "PR",
+        formatter: () => `${s.overall_pr_pct}%`,
+        color: isDark ? "#f1f5f9" : "#334155",
+      }},
+    }}},
+    tooltip: { y: { formatter: (v: number) => `${v.toFixed(1)} kWh` } },
+  };
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
