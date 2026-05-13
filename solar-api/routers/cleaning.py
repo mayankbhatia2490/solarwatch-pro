@@ -139,7 +139,7 @@ def _current_efficiency() -> float | None:
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
-@router.post("/")
+@router.post("")
 def log_cleaning(event: CleaningEvent) -> Dict[str, Any]:
     """Record a panel cleaning. Returns the event with before-efficiency (after computed later)."""
     try:
@@ -161,7 +161,7 @@ def log_cleaning(event: CleaningEvent) -> Dict[str, Any]:
     return {"status": "logged", "event": _enrich_event(entry)}
 
 
-@router.get("/")
+@router.get("")
 def get_cleaning_history() -> Dict[str, Any]:
     """List all cleaning events with real before/after efficiency impact from InfluxDB."""
     log = _load_log()

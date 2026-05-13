@@ -17,7 +17,7 @@ FREQ_LOW      = 49.5
 FREQ_HIGH     = 50.5
 
 
-@router.get("/")
+@router.get("")
 def get_anomalies(days: int = 7) -> Dict[str, Any]:
     """
     Scans real InfluxDB data and surfaces actual anomalies.

@@ -8,7 +8,7 @@ router = APIRouter(prefix="/api/performance", tags=["Performance"])
 
 BUCKET = settings.influxdb_bucket
 
-@router.get("/")
+@router.get("")
 def get_performance_data() -> Dict[str, Any]:
     """
     Returns long-term performance using real InfluxDB monthly energy data.

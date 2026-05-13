@@ -53,7 +53,7 @@ class SiteCreate(BaseModel):
     notes: Optional[str] = None
 
 
-@router.post("/")
+@router.post("")
 def create_site(body: SiteCreate):
     """Register a new site for monitoring. Credentials stored locally — never logged."""
     sites = _load_sites()
@@ -96,7 +96,7 @@ def create_site(body: SiteCreate):
     }
 
 
-@router.get("/")
+@router.get("")
 def list_sites():
     """List all registered sites (credentials redacted)."""
     sites = _load_sites()

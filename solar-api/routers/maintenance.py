@@ -213,7 +213,7 @@ def _analyze_thermal(temp_series: list[float]) -> dict:
 
 # ── Main route ────────────────────────────────────────────────────────────────
 
-@router.get("/")
+@router.get("")
 def get_maintenance_status() -> Dict[str, Any]:
     """
     Returns predictive maintenance analysis from real InfluxDB data.

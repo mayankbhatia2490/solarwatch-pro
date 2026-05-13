@@ -30,7 +30,7 @@ from(bucket: "{bucket}")
     return float(recs[0].get_value()) if recs else 0.0
 
 
-@router.get("/")
+@router.get("")
 async def get_weather() -> Dict[str, Any]:
     """
     Fetches real-time weather from Open-Meteo for Karnal, Haryana (29.68°N, 76.99°E).

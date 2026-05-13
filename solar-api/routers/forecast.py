@@ -24,7 +24,7 @@ def _expected_power(irradiance_wm2: float, temp_c: float) -> float:
     return max(0.0, (irradiance_wm2 / 1000.0) * CAPACITY_W * PR * correction)
 
 
-@router.get("/")
+@router.get("")
 async def get_forecast() -> Dict[str, Any]:
     """
     Returns hourly production forecast for today + next 2 days.
