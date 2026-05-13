@@ -20,7 +20,7 @@ CAPACITY_W = settings.installed_capacity_w
 DESIGN_PR  = 0.78
 TEMP_WARN  = 65.0
 
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
 
 def _build_context(days: int) -> dict:
@@ -283,7 +283,7 @@ async def get_ai_insight(days: int = 30) -> Dict[str, Any]:
     return {
         "status":    "success",
         "period_days": days,
-        "model":     "gemini-1.5-flash",
+        "model":     "gemini-2.0-flash",
         "summary":   ctx["summary"],
         "ai_report": ai_text,
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -480,7 +480,7 @@ async def get_ai_suggestions() -> Dict[str, Any]:
 
     return {
         "status":       "success",
-        "model":        "gemini-1.5-flash",
+        "model":        "gemini-2.0-flash",
         "context":      {**readings, "pr_30d_pct": pr_30d, "hot_days_30d": hot_days,
                          "days_since_clean": days_since_clean},
         "suggestions":  suggestions,
