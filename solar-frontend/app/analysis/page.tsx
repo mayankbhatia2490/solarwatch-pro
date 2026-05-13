@@ -3,7 +3,42 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
-import { AlertTriangle, CheckCircle, Info, Calendar, Droplets, TrendingUp, TrendingDown } from "lucide-react";
+import { AlertTriangle, CheckCircle, Info, Calendar, Droplets, TrendingUp, TrendingDown, Sparkles, Loader2 } from "lucide-react";
+
+// Lightweight inline markdown renderer — handles ### headers and - bullets only
+function AiReport({ text }: { text: string }) {
+  const lines = text.split("\n");
+  return (
+    <div className="space-y-1 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+      {lines.map((line, i) => {
+        if (line.startsWith("### ")) {
+          return (
+            <div key={i} className="font-bold text-base pt-3 first:pt-0" style={{ color: "var(--card-value)" }}>
+              {line.replace("### ", "")}
+            </div>
+          );
+        }
+        if (line.startsWith("## ")) {
+          return (
+            <div key={i} className="font-bold text-lg pt-3 first:pt-0" style={{ color: "var(--card-value)" }}>
+              {line.replace("## ", "")}
+            </div>
+          );
+        }
+        if (line.match(/^[-*] /)) {
+          return (
+            <div key={i} className="flex gap-2 ml-2">
+              <span className="text-emerald-500 flex-shrink-0">•</span>
+              <span>{line.replace(/^[-*] /, "")}</span>
+            </div>
+          );
+        }
+        if (line.trim() === "") return <div key={i} className="h-1" />;
+        return <div key={i}>{line}</div>;
+      })}
+    </div>
+  );
+}
 
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
@@ -32,13 +67,20 @@ function borderColor(priority: string) {
 export default function AnalysisPage() {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
-  const [data, setData]       = useState<any>(null);
-  const [cleaning, setCleaning] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [days, setDays]       = useState(30);
+  const [data, setData]           = useState<any>(null);
+  const [cleaning, setCleaning]   = useState<any[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [days, setDays]           = useState(30);
+  const [aiReport, setAiReport]   = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError]     = useState<string | null>(null);
+  const [aiDays, setAiDays]       = useState(0);  // which period was last analysed
 
   useEffect(() => {
     setLoading(true);
+    // Reset AI report when period changes
+    setAiReport(null);
+    setAiError(null);
     const API = process.env.NEXT_PUBLIC_API_URL ?? "";
     Promise.all([
       fetch(`${API}/api/analysis?days=${days}`).then(r => r.ok ? r.json() : null),
@@ -49,6 +91,26 @@ export default function AnalysisPage() {
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [days]);
+
+  async function generateAiReport() {
+    setAiLoading(true);
+    setAiError(null);
+    setAiReport(null);
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? ""}/api/ai/insight?days=${days}`);
+      const json = await res.json();
+      if (!res.ok) {
+        setAiError(json.detail || "Failed to generate AI report");
+      } else {
+        setAiReport(json.ai_report);
+        setAiDays(json.period_days);
+      }
+    } catch {
+      setAiError("Could not reach the API — check your connection.");
+    } finally {
+      setAiLoading(false);
+    }
+  }
 
   const labelColor = isDark ? "#94a3b8" : "#475569";
   const gridColor  = isDark ? "rgba(148,163,184,0.1)" : "#e2e8f0";
@@ -220,6 +282,79 @@ export default function AnalysisPage() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* AI Insight panel */}
+      <div className="themed-card p-6">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-violet-400" />
+            <div>
+              <h2 className="text-lg font-semibold leading-tight" style={{ color: "var(--card-title)" }}>
+                AI Diagnostic Report
+              </h2>
+              <p className="text-xs mt-0.5" style={{ color: "var(--card-sub)" }}>
+                Gemini 1.5 Flash · powered by real sensor data · free tier
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={generateAiReport}
+            disabled={aiLoading}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-500 hover:bg-violet-600 text-white text-sm font-semibold transition-colors disabled:opacity-60"
+          >
+            {aiLoading
+              ? <><Loader2 className="w-4 h-4 animate-spin" /> Analysing {days}-day data…</>
+              : <><Sparkles className="w-4 h-4" /> {aiReport ? "Regenerate" : "Generate Analysis"}</>
+            }
+          </button>
+        </div>
+
+        {!aiReport && !aiLoading && !aiError && (
+          <p className="mt-4 text-sm" style={{ color: "var(--text-secondary)" }}>
+            Click <strong style={{ color: "var(--card-value)" }}>Generate Analysis</strong> to get an AI-written diagnostic report
+            for this {days}-day period — covering your PR trend, thermal derating, shading patterns,
+            cleaning impact, and priority actions. Uses your real inverter data, not generic advice.
+          </p>
+        )}
+
+        {aiLoading && (
+          <div className="mt-4 flex items-center gap-3 py-6 justify-center">
+            <Loader2 className="w-6 h-6 animate-spin text-violet-400" />
+            <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              Fetching {days} days of sensor data and sending to Gemini…
+            </span>
+          </div>
+        )}
+
+        {aiError && (
+          <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+            <p className="text-sm text-red-400 font-medium">Could not generate report</p>
+            <p className="text-xs mt-1 text-red-300">{aiError}</p>
+            {aiError.includes("GEMINI_API_KEY") && (
+              <p className="text-xs mt-2" style={{ color: "var(--text-secondary)" }}>
+                Add <code className="bg-black/20 px-1 rounded">GEMINI_API_KEY=your_key</code> to
+                your <code className="bg-black/20 px-1 rounded">.env</code> file and rebuild solar-api.
+                Get a free key at{" "}
+                <span className="text-violet-400">aistudio.google.com/app/apikey</span>
+              </p>
+            )}
+          </div>
+        )}
+
+        {aiReport && (
+          <div className="mt-5 pt-5 border-t" style={{ borderColor: "var(--bg-border)" }}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-400 font-medium">
+                Gemini 1.5 Flash · {aiDays}-day analysis
+              </span>
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                Based on real InfluxDB readings — not fabricated
+              </span>
+            </div>
+            <AiReport text={aiReport} />
+          </div>
+        )}
       </div>
 
       {/* Daily bar chart */}

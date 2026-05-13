@@ -6,6 +6,7 @@ from routers import (
     dashboard, electrical, notifications, grid, thermal,
     anomalies, maintenance, performance, weather, reports,
     settings as settings_router, forecast, cleaning, sites, fleet, export, analysis,
+    ai_insight,
 )
 from influx import set_request_site_id
 from config import settings
@@ -57,6 +58,7 @@ app.include_router(sites.router)
 app.include_router(fleet.router)
 app.include_router(export.router)
 app.include_router(analysis.router)
+app.include_router(ai_insight.router)
 
 @app.get("/health")
 async def health():
