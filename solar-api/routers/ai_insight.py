@@ -327,7 +327,7 @@ async def get_ai_insight(days: int = 30) -> Dict[str, Any]:
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
             "temperature": 0.3,
-            "maxOutputTokens": 1024,
+            "maxOutputTokens": 2048,
             "topP": 0.8,
         },
     }
@@ -477,7 +477,7 @@ Return ONLY a valid JSON array, no markdown, no explanation, no code fences. Sta
 
 
 async def _call_gemini_json(prompt: str) -> list:
-    """Call Gemini and parse the JSON array response."""
+    """Call Gemini in JSON mode and parse the response array."""
     import json as _json
 
     model = await _resolve_model()
@@ -485,12 +485,13 @@ async def _call_gemini_json(prompt: str) -> list:
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
             "temperature": 0.2,
-            "maxOutputTokens": 2048,
+            "maxOutputTokens": 8192,
             "topP": 0.8,
+            "responseMimeType": "application/json",  # forces valid JSON, no truncation mid-string
         },
     }
 
-    async with httpx.AsyncClient(timeout=35) as client:
+    async with httpx.AsyncClient(timeout=45) as client:
         resp = await client.post(
             f"{_gemini_url(model)}?key={settings.gemini_api_key}",
             json=payload,
@@ -501,11 +502,17 @@ async def _call_gemini_json(prompt: str) -> list:
         result = resp.json()
 
     raw = result["candidates"][0]["content"]["parts"][0]["text"].strip()
-    # Strip any accidental markdown fences Gemini adds despite instructions
+    # Strip accidental markdown fences (shouldn't happen in JSON mode, but guard anyway)
     if raw.startswith("```"):
         raw = raw.split("\n", 1)[1].rsplit("```", 1)[0].strip()
 
-    return _json.loads(raw)
+    try:
+        return _json.loads(raw)
+    except _json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Gemini returned invalid JSON: {e}. First 200 chars: {raw[:200]}"
+        )
 
 
 @router.get("/suggestions")
