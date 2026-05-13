@@ -42,7 +42,7 @@ def _empty_response(days: int) -> Dict[str, Any]:
     }
 
 
-@router.get("/")
+@router.get("")
 def get_analysis(days: int = 30) -> Dict[str, Any]:
     """
     Returns weather-adjusted performance analysis for the last N days.
