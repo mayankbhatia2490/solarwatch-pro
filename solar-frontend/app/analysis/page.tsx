@@ -42,10 +42,10 @@ export default function AnalysisPage() {
     const API = process.env.NEXT_PUBLIC_API_URL ?? "";
     Promise.all([
       fetch(`${API}/api/analysis?days=${days}`).then(r => r.ok ? r.json() : null),
-      fetch(`${API}/api/cleaning`).then(r => r.ok ? r.json() : { events: [] }),
+      fetch(`${API}/api/cleaning`).then(r => r.ok ? r.json() : { history: [] }),
     ]).then(([analysis, clean]) => {
       setData(analysis);
-      setCleaning(clean?.events ?? []);
+      setCleaning(clean?.history ?? []);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [days]);
@@ -285,8 +285,8 @@ export default function AnalysisPage() {
               </thead>
               <tbody>
                 {cleaning.map((ev: any, i: number) => {
-                  const before = ev.efficiency_before;
-                  const after  = ev.efficiency_after;
+                  const before = ev.efficiency_before_pct;
+                  const after  = ev.efficiency_after_pct;
                   const delta  = (before != null && after != null) ? (after - before) : null;
                   return (
                     <tr key={i} className="border-b last:border-0" style={{ borderColor: "var(--bg-border)" }}>

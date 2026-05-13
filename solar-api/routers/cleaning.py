@@ -1,18 +1,20 @@
 """
 Panel cleaning tracker.
-- POST /api/cleaning      — log a cleaning event
-- GET  /api/cleaning      — list all cleaning events with before/after efficiency impact
-- GET  /api/cleaning/next — when to clean next based on efficiency trend
+- POST /api/cleaning             — log a cleaning event
+- GET  /api/cleaning             — list all cleaning events with before/after efficiency impact
+- GET  /api/cleaning/next        — when to clean next based on efficiency trend
+- GET  /api/cleaning/rain-history — rain events from Open-Meteo with soiling risk classification
 
 Cleaning events stored in /app/data/cleaning_log.json (lightweight, <1KB per entry).
 Efficiency impact computed from real InfluxDB data: 7-day window before vs after.
 """
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Literal
 from datetime import datetime, timezone, timedelta, date
 from pathlib import Path
 import json
+import httpx
 
 from influx import query
 from config import settings
@@ -27,8 +29,10 @@ WINDOW_DAYS  = 7   # compare 7 days before vs 7 days after
 # ── Models ────────────────────────────────────────────────────────────────────
 
 class CleaningEvent(BaseModel):
-    date:  str           # ISO date YYYY-MM-DD
-    notes: Optional[str] = None
+    date:             str                              # ISO date YYYY-MM-DD
+    notes:            Optional[str]            = None
+    type:             Literal["manual", "rain"] = "manual"
+    precipitation_mm: Optional[float]          = None
 
 
 # ── Storage helpers ───────────────────────────────────────────────────────────
@@ -144,7 +148,12 @@ def log_cleaning(event: CleaningEvent) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
 
     log = _load_log()
-    entry = {"date": event.date, "notes": event.notes or ""}
+    entry = {
+        "date":             event.date,
+        "notes":            event.notes or "",
+        "type":             event.type,
+        "precipitation_mm": event.precipitation_mm,
+    }
     log.append(entry)
     log.sort(key=lambda e: e["date"])
     _save_log(log)
@@ -216,3 +225,90 @@ def get_next_cleaning() -> Dict[str, Any]:
             f"Schedule cleaning within {days_to_next} days."
         )
     }
+
+
+@router.get("/rain-history")
+async def get_rain_history(days: int = 60) -> Dict[str, Any]:
+    """
+    Fetch precipitation history from Open-Meteo for Karnal, Haryana.
+    Classifies each day as: rain_wash (>10mm), light_rain (2-10mm), soiling_risk
+    (2-4 days after light rain without subsequent rain), or dry.
+    Also returns manual cleaning events so the frontend can overlay everything.
+    """
+    days = min(max(days, 7), 92)  # Open-Meteo supports up to 92 past_days
+    lat, lon = 29.69, 76.99       # Karnal, Haryana
+
+    url = (
+        f"https://api.open-meteo.com/v1/forecast"
+        f"?latitude={lat}&longitude={lon}"
+        f"&daily=precipitation_sum"
+        f"&timezone=Asia/Kolkata"
+        f"&past_days={days}"
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            weather = resp.json()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Open-Meteo unavailable: {e}")
+
+    dates = weather["daily"]["time"]
+    precip = weather["daily"]["precipitation_sum"]
+
+    # Build day classifications
+    day_map: dict[str, dict] = {}
+    for d, p in zip(dates, precip):
+        mm = p or 0.0
+        if mm > 10:
+            kind = "rain_wash"
+        elif mm >= 2:
+            kind = "light_rain"
+        else:
+            kind = "dry"
+        day_map[d] = {"date": d, "precipitation_mm": round(mm, 1), "kind": kind}
+
+    # Mark soiling_risk: 2-4 days after a light_rain day, if not followed by rain_wash
+    sorted_dates = sorted(day_map.keys())
+    for i, d in enumerate(sorted_dates):
+        if day_map[d]["kind"] == "light_rain":
+            for offset in range(2, 5):
+                if i + offset < len(sorted_dates):
+                    candidate = sorted_dates[i + offset]
+                    if day_map[candidate]["kind"] == "dry":
+                        # Only mark soiling_risk if no rain_wash between light_rain and candidate
+                        blocked = any(
+                            day_map[sorted_dates[i + k]]["kind"] == "rain_wash"
+                            for k in range(1, offset)
+                        )
+                        if not blocked:
+                            day_map[candidate]["kind"] = "soiling_risk"
+
+    # Overlay manual cleaning events from the log
+    log = _load_log()
+    for ev in log:
+        d = ev["date"]
+        if d in day_map:
+            day_map[d]["manual_clean"] = True
+            day_map[d]["clean_notes"] = ev.get("notes", "")
+            day_map[d]["clean_type"]  = ev.get("type", "manual")
+        else:
+            # Day outside the weather window — still include it as a marker
+            day_map[d] = {
+                "date": d, "precipitation_mm": None, "kind": "dry",
+                "manual_clean": True,
+                "clean_notes": ev.get("notes", ""),
+                "clean_type":  ev.get("type", "manual"),
+            }
+
+    result = sorted(day_map.values(), key=lambda x: x["date"])
+
+    stats = {
+        "rain_wash_count":    sum(1 for x in result if x["kind"] == "rain_wash"),
+        "light_rain_count":   sum(1 for x in result if x["kind"] == "light_rain"),
+        "soiling_risk_count": sum(1 for x in result if x["kind"] == "soiling_risk"),
+        "manual_clean_count": sum(1 for x in result if x.get("manual_clean")),
+    }
+
+    return {"status": "success", "days": days, "stats": stats, "days_data": result}
