@@ -178,6 +178,26 @@ export default function AnalysisPage() {
     },
   };
 
+  // ── Generation donut chart ────────────────────────────────────────────────
+  const lostKwh   = Math.max(s.total_expected_kwh - s.total_actual_kwh, 0);
+  const donutSeries  = [s.total_actual_kwh, lostKwh > 0 ? lostKwh : 0];
+  const donutOptions: any = {
+    chart: { type: "donut", background: "transparent" },
+    theme: { mode: isDark ? "dark" : "light" },
+    labels: ["Actual generated", "Unrealised (gap)"],
+    colors: ["#22c55e", "#f59e0b"],
+    dataLabels: { enabled: false },
+    legend: { labels: { colors: isDark ? "#f1f5f9" : "#334155" }, position: "bottom" },
+    plotOptions: { pie: { donut: { size: "65%",
+      labels: { show: true, total: {
+        show: true, label: "PR",
+        formatter: () => `${s.overall_pr_pct}%`,
+        color: isDark ? "#f1f5f9" : "#334155",
+      }},
+    }}},
+    tooltip: { y: { formatter: (v: number) => `${v.toFixed(1)} kWh` } },
+  };
+
   // ── Hour profile bar chart ────────────────────────────────────────────────
   const hourSeries = data ? [
     { name: "Expected", data: data.hourly_profile.map((h: any) => h.avg_expected_w) },
@@ -207,7 +227,16 @@ export default function AnalysisPage() {
     </div>
   );
 
-  if (!data) return <div className="p-6 text-sm" style={{ color: "var(--card-sub)" }}>Failed to load analysis data.</div>;
+  if (!data) return (
+    <div className="themed-card p-8 text-center space-y-2">
+      <div className="text-2xl">📡</div>
+      <div className="font-semibold" style={{ color: "var(--card-value)" }}>Could not reach the API</div>
+      <div className="text-sm" style={{ color: "var(--text-secondary)" }}>
+        Check that <code className="px-1 bg-black/20 rounded">solar-api</code> is running — or visit{" "}
+        <span className="text-emerald-500">/api/analysis</span> directly to see the error.
+      </div>
+    </div>
+  );
 
   const s = data.summary;
   const prVsDesign = s.overall_pr_pct - s.design_pr_pct;
@@ -262,6 +291,36 @@ export default function AnalysisPage() {
           <div className="text-xs mt-1" style={{ color: "var(--card-sub)" }}>
             {s.lost_kwh > 0 ? `≈ ₹${s.lost_inr} · ${s.underperform_days}/${s.total_days} days` : "All generation within expected"}
           </div>
+        </div>
+      </div>
+
+      {/* Generation breakdown donut + stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="themed-card p-5">
+          <h2 className="text-base font-semibold mb-3" style={{ color: "var(--card-title)" }}>
+            Generation Breakdown
+          </h2>
+          <div className="h-[220px]">
+            <Chart options={donutOptions} series={donutSeries} type="donut" height="100%" />
+          </div>
+        </div>
+        <div className="themed-card p-5 space-y-3">
+          <h2 className="text-base font-semibold mb-1" style={{ color: "var(--card-title)" }}>Period Summary</h2>
+          {[
+            { label: "Period",           value: `${days} days` },
+            { label: "Weather-expected", value: `${s.total_expected_kwh} kWh` },
+            { label: "Actually generated", value: `${s.total_actual_kwh} kWh`, highlight: true },
+            { label: "Unrealised generation", value: lostKwh > 0 ? `${lostKwh.toFixed(1)} kWh (≈ ₹${s.lost_inr})` : "None ✓" },
+            { label: "Performance Ratio", value: `${s.overall_pr_pct}%` },
+            { label: "Under-performing days", value: `${s.underperform_days} / ${s.total_days}` },
+          ].map(({ label, value, highlight }) => (
+            <div key={label} className="flex items-center justify-between py-2 border-b last:border-0 text-sm"
+              style={{ borderColor: "var(--bg-border)" }}>
+              <span style={{ color: "var(--card-label)" }}>{label}</span>
+              <span className={`font-semibold ${highlight ? "text-emerald-500" : ""}`}
+                style={highlight ? {} : { color: "var(--card-value)" }}>{value}</span>
+            </div>
+          ))}
         </div>
       </div>
 

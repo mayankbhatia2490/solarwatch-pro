@@ -5,10 +5,12 @@ underperformance periods, and actionable improvement recommendations.
 All data comes from real InfluxDB readings — nothing is fabricated.
 """
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 from typing import Dict, Any
 from datetime import datetime, timezone, timedelta
 from influx import query
 from config import settings
+import traceback
 
 router = APIRouter(prefix="/api/analysis", tags=["Analysis"])
 
@@ -19,6 +21,27 @@ DESIGN_PR = 0.78   # India rooftop baseline Performance Ratio
 TEMP_WARN = 65.0   # °C — inverter starts thermal derating
 
 
+def _empty_response(days: int) -> Dict[str, Any]:
+    return {
+        "status": "no_data",
+        "period_days": days,
+        "summary": {
+            "total_actual_kwh": 0, "total_expected_kwh": 0,
+            "overall_pr_pct": 0, "design_pr_pct": int(DESIGN_PR * 100),
+            "lost_kwh": 0, "lost_inr": 0,
+            "underperform_days": 0, "total_days": 0,
+        },
+        "daily_bars": [], "pr_trend": [], "hourly_profile": [],
+        "recommendations": [{
+            "priority": "info", "icon": "📡",
+            "title": "No data yet for this period",
+            "detail": "The collector writes data every 5 minutes during daylight hours. "
+                      "Check that the collector container is running and the inverter is online.",
+            "action": "docker compose logs collector --tail 50",
+        }],
+    }
+
+
 @router.get("/")
 def get_analysis(days: int = 30) -> Dict[str, Any]:
     """
@@ -26,6 +49,14 @@ def get_analysis(days: int = 30) -> Dict[str, Any]:
     Compares actual generation against expected (based on irradiance),
     identifies underperformance causes, and provides improvement actions.
     """
+    try:
+        return _get_analysis_inner(days)
+    except Exception as exc:
+        traceback.print_exc()
+        return JSONResponse(status_code=200, content=_empty_response(days))
+
+
+def _get_analysis_inner(days: int) -> Dict[str, Any]:
     now = datetime.now(timezone.utc)
 
     # ── 1. Daily actual vs expected (for bar chart) ────────────────────────────
