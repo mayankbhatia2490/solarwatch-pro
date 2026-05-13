@@ -20,8 +20,62 @@ CAPACITY_W = settings.installed_capacity_w
 DESIGN_PR  = 0.78
 TEMP_WARN  = 65.0
 
-def _gemini_url() -> str:
-    return f"https://generativelanguage.googleapis.com/v1beta/models/{settings.gemini_model}:generateContent"
+_GEMINI_BASE = "https://generativelanguage.googleapis.com"
+
+# In-process cache so we only probe the models list once per container lifetime
+_resolved_model: str | None = None
+
+# Preferred model names in order — first one that exists wins
+_MODEL_PREFERENCES = [
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-preview-05-20",
+    "gemini-2.5-flash-preview-04-17",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-001",
+    "gemini-2.0-flash-lite",
+    "gemini-1.5-flash-latest",
+    "gemini-1.5-flash",
+]
+
+async def _resolve_model() -> str:
+    """
+    Return the best available Gemini model for this API key.
+    Calls the models-list endpoint once, then caches the result.
+    Falls back to the configured gemini_model setting if discovery fails.
+    """
+    global _resolved_model
+    if _resolved_model:
+        return _resolved_model
+
+    # If user explicitly set a non-default model, trust it and skip discovery
+    known_defaults = {"gemini-2.0-flash", "gemini-2.0-flash-001", "gemini-1.5-flash"}
+    if settings.gemini_model not in known_defaults:
+        _resolved_model = settings.gemini_model
+        return _resolved_model
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"{_GEMINI_BASE}/v1beta/models?key={settings.gemini_api_key}"
+            )
+            if resp.status_code != 200:
+                _resolved_model = settings.gemini_model
+                return _resolved_model
+            data = resp.json()
+            available = {m["name"].split("/")[-1] for m in data.get("models", [])}
+
+        for preferred in _MODEL_PREFERENCES:
+            if preferred in available:
+                _resolved_model = preferred
+                return _resolved_model
+    except Exception:
+        pass
+
+    _resolved_model = settings.gemini_model
+    return _resolved_model
+
+def _gemini_url(model: str) -> str:
+    return f"{_GEMINI_BASE}/v1beta/models/{model}:generateContent"
 
 
 def _build_context(days: int) -> dict:
@@ -216,6 +270,26 @@ Bullet list of the most likely causes of any underperformance, ordered by probab
 Keep it under 450 words. Use Indian context (monsoon timing, dust season, summer heat). Avoid generic solar advice — be specific to this data."""
 
 
+@router.get("/models")
+async def list_gemini_models() -> Dict[str, Any]:
+    """Lists available Gemini models for the configured API key. Useful for diagnostics."""
+    if not settings.gemini_api_key:
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured.")
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"{_GEMINI_BASE}/v1beta/models?key={settings.gemini_api_key}"
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        models = [m["name"].split("/")[-1] for m in data.get("models", [])]
+        flash  = [m for m in models if "flash" in m.lower()]
+        resolved = await _resolve_model()
+        return {"available_flash_models": flash, "all_models": models, "will_use": resolved}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
 @router.get("/insight")
 async def get_ai_insight(days: int = 30) -> Dict[str, Any]:
     """
@@ -246,6 +320,7 @@ async def get_ai_insight(days: int = 30) -> Dict[str, Any]:
         pass
 
     prompt = _build_prompt(ctx, cleaning_history, days)
+    model  = await _resolve_model()
 
     # Call Gemini
     payload = {
@@ -260,7 +335,7 @@ async def get_ai_insight(days: int = 30) -> Dict[str, Any]:
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
-                f"{_gemini_url()}?key={settings.gemini_api_key}",
+                f"{_gemini_url(model)}?key={settings.gemini_api_key}",
                 json=payload,
             )
             if resp.status_code == 400:
@@ -284,7 +359,7 @@ async def get_ai_insight(days: int = 30) -> Dict[str, Any]:
     return {
         "status":    "success",
         "period_days": days,
-        "model":     "gemini-2.0-flash",
+        "model":     model,
         "summary":   ctx["summary"],
         "ai_report": ai_text,
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -405,6 +480,7 @@ async def _call_gemini_json(prompt: str) -> list:
     """Call Gemini and parse the JSON array response."""
     import json as _json
 
+    model = await _resolve_model()
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
@@ -416,7 +492,7 @@ async def _call_gemini_json(prompt: str) -> list:
 
     async with httpx.AsyncClient(timeout=35) as client:
         resp = await client.post(
-            f"{_gemini_url()}?key={settings.gemini_api_key}",
+            f"{_gemini_url(model)}?key={settings.gemini_api_key}",
             json=payload,
         )
         if resp.status_code == 403:
@@ -481,7 +557,7 @@ async def get_ai_suggestions() -> Dict[str, Any]:
 
     return {
         "status":       "success",
-        "model":        "gemini-2.0-flash",
+        "model":        await _resolve_model(),
         "context":      {**readings, "pr_30d_pct": pr_30d, "hot_days_30d": hot_days,
                          "days_since_clean": days_since_clean},
         "suggestions":  suggestions,
