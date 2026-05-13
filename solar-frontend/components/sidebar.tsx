@@ -1,17 +1,63 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Sun, Activity, TrendingUp, Wrench, Settings, Menu, X, Moon } from "lucide-react";
-import { useState } from "react";
+import { Sun, Activity, TrendingUp, Wrench, Settings, Menu, X, Moon, CalendarDays } from "lucide-react";
+import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 
 const nav = [
-  { href: "/",            label: "Dashboard",    icon: Sun },
-  { href: "/monitor",     label: "Live Monitor", icon: Activity },
-  { href: "/performance", label: "Performance",  icon: TrendingUp },
-  { href: "/maintenance", label: "Maintenance",  icon: Wrench },
-  { href: "/settings",    label: "Settings",     icon: Settings },
+  { href: "/",          label: "Dashboard",   icon: Sun },
+  { href: "/monitor",   label: "Live Monitor", icon: Activity },
+  { href: "/longterm",  label: "Long-term",    icon: CalendarDays },
+  { href: "/maintenance", label: "Maintenance", icon: Wrench },
+  { href: "/settings",  label: "Settings",     icon: Settings },
 ];
+
+function WeatherWidget() {
+  const [wx, setWx] = useState<any>(null);
+
+  useEffect(() => {
+    const load = () =>
+      fetch("/api/weather")
+        .then(r => r.ok ? r.json() : null)
+        .then(d => setWx(d))
+        .catch(() => {});
+    load();
+    const t = setInterval(load, 5 * 60 * 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  if (!wx?.data?.current) return null;
+
+  const cur      = wx.data.current;
+  const cloud    = cur.cloud_cover ?? 0;
+  const temp     = cur.temperature_2m;
+  const irr      = wx.data.solar_radiation_wm2 ?? cur.shortwave_radiation ?? null;
+  const expW     = wx.data.expected_power_w ?? null;
+  const skyIcon  = cloud < 15 ? "☀️" : cloud < 40 ? "🌤️" : cloud < 70 ? "⛅" : "☁️";
+
+  return (
+    <div className="mx-4 mb-3 px-3 py-2.5 rounded-xl border text-xs space-y-1.5"
+      style={{ background: "var(--bg-surface-2)", borderColor: "var(--bg-border)" }}>
+      <div className="flex items-center justify-between">
+        <span className="font-medium" style={{ color: "var(--card-value)" }}>
+          {skyIcon} {temp != null ? `${temp.toFixed(0)}°C` : "—"}
+        </span>
+        <span style={{ color: "var(--text-muted)" }}>{cloud}% cloud</span>
+      </div>
+      {irr != null && (
+        <div style={{ color: "var(--text-secondary)" }}>
+          ☀ {irr.toFixed(0)} W/m² irradiance
+        </div>
+      )}
+      {expW != null && (
+        <div className="font-semibold text-emerald-400">
+          ⚡ {expW >= 1000 ? `${(expW / 1000).toFixed(1)} kW` : `${expW.toFixed(0)} W`} expected now
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function Sidebar() {
   const path = usePathname();
@@ -29,7 +75,6 @@ export function Sidebar() {
           <span className="font-bold text-[var(--text-primary)] text-sm">SolarWatch Pro</span>
         </div>
         <div className="flex items-center gap-2">
-          {/* Theme toggle — mobile */}
           <button
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
@@ -59,7 +104,6 @@ export function Sidebar() {
               <div className="text-xs text-[var(--text-secondary)]">Solar Monitoring</div>
             </div>
           </div>
-          {/* Theme toggle — desktop sidebar */}
           <button
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             className="p-2 rounded-xl bg-[var(--bg-hover)] border border-[var(--bg-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
@@ -75,8 +119,11 @@ export function Sidebar() {
           <span className="text-xs text-emerald-400 font-medium">Live Monitoring Active</span>
         </div>
 
+        {/* Weather widget — always visible */}
+        <WeatherWidget />
+
         {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
           {nav.map(({ href, label, icon: Icon }) => {
             const active = path === href;
             return (

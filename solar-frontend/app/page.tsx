@@ -1,32 +1,33 @@
 "use client";
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Sun, Zap, IndianRupee, Leaf, Activity, Thermometer, Wind, Cloud, RefreshCw, TrendingUp, AlertCircle, CheckCircle, AlertTriangle, Calendar } from "lucide-react";
+import dynamic from "next/dynamic";
+import { useTheme } from "next-themes";
+import { Sun, Zap, IndianRupee, Leaf, Activity, Thermometer, Wind, Cloud, RefreshCw, TrendingUp, TrendingDown, AlertCircle, CheckCircle, AlertTriangle, Calendar, Droplets, Sparkles } from "lucide-react";
 import { GenerationChart } from "@/components/generation-chart";
 import { SmartSuggestions } from "@/components/smart-suggestions";
 import { fetchDashboardSummary, fetchDailyChart, fetchHealthScorecard } from "@/lib/api";
+
+const Chart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function isNighttime(sunriseISO?: string, sunsetISO?: string): boolean {
   const now = Date.now();
   if (!sunriseISO || !sunsetISO) {
-    // Fallback: Karnal approx 6:00–19:30 IST
     const h = new Date().getHours();
     return h < 6 || h >= 19;
   }
   return now < new Date(sunriseISO).getTime() || now > new Date(sunsetISO).getTime();
 }
 
-// ── Time range config ──────────────────────────────────────────────────────────
-
 const QUICK_RANGES = [
-  { label: "1h",   value: "1h"  },
-  { label: "4h",   value: "4h"  },
-  { label: "8h",   value: "8h"  },
-  { label: "12h",  value: "12h" },
-  { label: "1 Day",value: "today"},
-  { label: "Yesterday", value: "yesterday" },
-  { label: "7 Days",value: "7d" },
+  { label: "1h",        value: "1h"       },
+  { label: "4h",        value: "4h"       },
+  { label: "8h",        value: "8h"       },
+  { label: "12h",       value: "12h"      },
+  { label: "1 Day",     value: "today"    },
+  { label: "Yesterday", value: "yesterday"},
+  { label: "7 Days",    value: "7d"       },
 ];
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -57,14 +58,8 @@ function HeroCard({ power, capacity_pct, status, night }: any) {
   const isGenerating = power > 0 && status === "online";
   const isNight = night && status === "offline";
   const pct = Math.min(capacity_pct, 100);
-
-  const statusLabel = isGenerating
-    ? "Generating"
-    : isNight
-    ? "Night / Standby"
-    : "Offline";
-
-  const statusNote = isGenerating
+  const statusLabel = isGenerating ? "Generating" : isNight ? "Night / Standby" : "Offline";
+  const statusNote  = isGenerating
     ? `Generating at ${pct.toFixed(0)}% of 3.5kW capacity`
     : isNight
     ? "System is resting — no solar generation at night (normal)"
@@ -95,7 +90,6 @@ function HeroCard({ power, capacity_pct, status, night }: any) {
           </div>
           <div className="text-slate-400 text-lg font-medium mt-1">{power >= 1000 ? "kW" : "W"}</div>
         </div>
-        {/* Circular gauge */}
         <div className="relative w-24 h-24">
           <svg viewBox="0 0 80 80" className="w-full h-full -rotate-90">
             <circle cx="40" cy="40" r="32" fill="none" stroke="#1e293b" strokeWidth="8" />
@@ -114,7 +108,6 @@ function HeroCard({ power, capacity_pct, status, night }: any) {
           </div>
         </div>
       </div>
-
       <div className="text-xs" style={{ color: "var(--card-sub)" }}>{statusNote}</div>
     </div>
   );
@@ -167,46 +160,27 @@ function PaybackBar({ recovered, total, pct }: any) {
   );
 }
 
-// ── Chart range + date picker bar ─────────────────────────────────────────────
-
 function ChartRangeBar({ range, setRange, from, to, setFrom, setTo }: any) {
   const [showPicker, setShowPicker] = useState(false);
-
   function applyCustom() {
-    if (from && to) {
-      setRange("custom");
-      setShowPicker(false);
-    }
+    if (from && to) { setRange("custom"); setShowPicker(false); }
   }
-
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {/* Quick range pills */}
       <div className="chart-range-bar">
         {QUICK_RANGES.map(r => (
-          <button
-            key={r.value}
-            onClick={() => { setRange(r.value); setShowPicker(false); }}
-            className={`chart-range-btn ${range === r.value && range !== "custom" ? "active" : ""}`}
-          >
+          <button key={r.value} onClick={() => { setRange(r.value); setShowPicker(false); }}
+            className={`chart-range-btn ${range === r.value && range !== "custom" ? "active" : ""}`}>
             {r.label}
           </button>
         ))}
       </div>
-
-      {/* Custom date range button */}
-      <button
-        onClick={() => setShowPicker(!showPicker)}
+      <button onClick={() => setShowPicker(!showPicker)}
         className={`flex items-center gap-1.5 chart-range-btn border ${showPicker || range === "custom" ? "active border-emerald-500/40" : ""}`}
-        style={{ borderColor: "var(--bg-border)", borderRadius: "0.6rem" }}
-      >
+        style={{ borderColor: "var(--bg-border)", borderRadius: "0.6rem" }}>
         <Calendar className="w-3 h-3" />
-        {range === "custom" && from && to
-          ? `${from} → ${to}`
-          : "Date Range"}
+        {range === "custom" && from && to ? `${from} → ${to}` : "Date Range"}
       </button>
-
-      {/* Date picker dropdown */}
       {showPicker && (
         <div className="absolute mt-1 z-30 glass-card rounded-xl p-4 shadow-xl border flex gap-3 items-end flex-wrap"
              style={{ top: "100%", right: 0, borderColor: "var(--bg-border)", minWidth: 280 }}>
@@ -214,15 +188,13 @@ function ChartRangeBar({ range, setRange, from, to, setFrom, setTo }: any) {
             <label className="text-xs mb-1 block" style={{ color: "var(--card-label)" }}>From</label>
             <input type="date" value={from} onChange={e => setFrom(e.target.value)}
               className="text-xs px-2 py-1.5 rounded-lg border outline-none"
-              style={{ background: "var(--bg-surface-2)", borderColor: "var(--bg-border)", color: "var(--card-value)" }}
-            />
+              style={{ background: "var(--bg-surface-2)", borderColor: "var(--bg-border)", color: "var(--card-value)" }} />
           </div>
           <div>
             <label className="text-xs mb-1 block" style={{ color: "var(--card-label)" }}>To</label>
             <input type="date" value={to} onChange={e => setTo(e.target.value)}
               className="text-xs px-2 py-1.5 rounded-lg border outline-none"
-              style={{ background: "var(--bg-surface-2)", borderColor: "var(--bg-border)", color: "var(--card-value)" }}
-            />
+              style={{ background: "var(--bg-surface-2)", borderColor: "var(--bg-border)", color: "var(--card-value)" }} />
           </div>
           <button onClick={applyCustom}
             className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500 text-white hover:bg-emerald-600 transition-colors">
@@ -234,48 +206,166 @@ function ChartRangeBar({ range, setRange, from, to, setFrom, setTo }: any) {
   );
 }
 
+// ── Performance section ────────────────────────────────────────────────────────
+
+function PerformanceSection({ analysis, cleaning, isDark }: { analysis: any; cleaning: any; isDark: boolean }) {
+  if (!analysis) return null;
+
+  const s = analysis.summary;
+  const labelColor = isDark ? "#94a3b8" : "#475569";
+  const gridColor  = isDark ? "rgba(148,163,184,0.1)" : "#e2e8f0";
+
+  const prColor = s.overall_pr_pct >= 78 ? "text-emerald-500" : s.overall_pr_pct >= 65 ? "text-amber-500" : "text-red-500";
+  const lostKwh = Math.max(s.total_expected_kwh - s.total_actual_kwh, 0);
+
+  // Mini 7-day bar chart
+  const barSeries = [
+    { name: "Expected", data: analysis.daily_bars.map((d: any) => d.expected_kwh) },
+    { name: "Actual",   data: analysis.daily_bars.map((d: any) => d.actual_kwh)   },
+  ];
+  const barOptions: any = {
+    chart: { type: "bar", background: "transparent", toolbar: { show: false }, animations: { enabled: false }, sparkline: { enabled: false } },
+    theme: { mode: isDark ? "dark" : "light" },
+    colors: ["#3b82f6", "#22c55e"],
+    plotOptions: { bar: { columnWidth: "70%", borderRadius: 3, borderRadiusApplication: "end" } },
+    dataLabels: { enabled: false },
+    xaxis: {
+      categories: analysis.daily_bars.map((d: any) => d.date.slice(5)),
+      labels: { style: { colors: labelColor, fontSize: "10px" }, rotate: -45 },
+      axisBorder: { show: false }, axisTicks: { show: false },
+    },
+    yaxis: { labels: { style: { colors: labelColor, fontSize: "10px" }, formatter: (v: number) => `${v.toFixed(0)}` } },
+    grid: { borderColor: gridColor, strokeDashArray: 4 },
+    tooltip: { theme: isDark ? "dark" : "light", y: { formatter: (v: number) => `${v.toFixed(1)} kWh` } },
+    legend: { labels: { colors: isDark ? "#f1f5f9" : "#334155", fontSize: "11px" }, position: "top", horizontalAlign: "right" },
+  };
+
+  const urgencyBorder = cleaning?.urgency === "high" ? "border-l-red-500" : cleaning?.urgency === "medium" ? "border-l-amber-500" : "border-l-emerald-500";
+  const urgencyIcon   = cleaning?.urgency === "high" ? "text-red-500" : cleaning?.urgency === "medium" ? "text-amber-500" : "text-emerald-500";
+
+  return (
+    <div className="space-y-4">
+      {/* Section header */}
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold" style={{ color: "var(--card-title)" }}>7-day Performance</h2>
+        <a href="/performance" className="text-xs text-emerald-500 hover:underline">Full analysis →</a>
+      </div>
+
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { label: "Performance Ratio", value: `${s.overall_pr_pct}%`, sub: `${s.overall_pr_pct >= 78 ? "✓ Above" : "↓ Below"} 78% baseline`, valueClass: prColor },
+          { label: "Weather-expected",  value: `${s.total_expected_kwh} kWh`, sub: "Based on real irradiance", valueClass: "number-gradient-blue" },
+          { label: "Actually generated", value: `${s.total_actual_kwh} kWh`, sub: "Inverter measured",        valueClass: "number-gradient" },
+          { label: "Generation gap",    value: lostKwh > 0.5 ? `${lostKwh.toFixed(1)} kWh` : "None ✓", sub: lostKwh > 0.5 ? `≈ ₹${s.lost_inr} unrealised` : "All generation accounted for", valueClass: lostKwh > 0.5 ? "text-amber-500" : "text-emerald-500" },
+        ].map(({ label, value, sub, valueClass }) => (
+          <div key={label} className="glass-card rounded-2xl p-4">
+            <div className="text-xs mb-2" style={{ color: "var(--card-label)" }}>{label}</div>
+            <div className={`text-2xl font-bold ${valueClass}`}>{value}</div>
+            <div className="text-xs mt-1" style={{ color: "var(--card-sub)" }}>{sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Mini chart + clean status side by side on large screens */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 glass-card rounded-2xl p-5">
+          <p className="text-xs mb-3" style={{ color: "var(--card-sub)" }}>
+            🔵 Expected (weather-adjusted) · 🟢 Actual inverter output
+          </p>
+          {analysis.daily_bars.length === 0 ? (
+            <div className="h-32 flex items-center justify-center text-sm" style={{ color: "var(--card-sub)" }}>
+              No data yet — appears after first sunny day
+            </div>
+          ) : (
+            <div className="h-[180px]">
+              <Chart options={barOptions} series={barSeries} type="bar" height="100%" />
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          {/* Clean status */}
+          {cleaning && (
+            <div className={`glass-card rounded-2xl p-4 border-l-4 ${urgencyBorder}`}>
+              <div className="flex items-start gap-3">
+                <Droplets className={`w-4 h-4 mt-0.5 flex-shrink-0 ${urgencyIcon}`} />
+                <div>
+                  <div className="text-sm font-semibold" style={{ color: "var(--card-value)" }}>
+                    {cleaning.urgency === "high" ? "Clean panels now" : cleaning.urgency === "medium" ? "Cleaning soon" : "Panels clean ✓"}
+                  </div>
+                  <div className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                    {cleaning.days_since_cleaning} days since last clean
+                    {cleaning.current_efficiency_pct != null && ` · ${cleaning.current_efficiency_pct}% efficiency`}
+                  </div>
+                  <a href="/maintenance" className="text-xs text-emerald-500 hover:underline mt-1 inline-block">Log cleaning →</a>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Top recommendation */}
+          {analysis.recommendations?.slice(0, 1).map((r: any, i: number) => (
+            <div key={i} className="glass-card rounded-2xl p-4">
+              <div className="text-xs font-semibold mb-1" style={{ color: "var(--card-value)" }}>
+                {r.icon} {r.title}
+              </div>
+              <div className="text-xs" style={{ color: "var(--text-secondary)" }}>{r.detail}</div>
+              <div className="mt-2 text-xs font-medium text-emerald-500">→ {r.action}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const [summary, setSummary] = useState<any>(null);
-  const [chart, setChart] = useState<any>(null);
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+
+  const [summary, setSummary]     = useState<any>(null);
+  const [chart, setChart]         = useState<any>(null);
   const [scorecard, setScorecard] = useState<any>(null);
+  const [analysis, setAnalysis]   = useState<any>(null);
+  const [cleaning, setCleaning]   = useState<any>(null);
   const [chartRange, setChartRange] = useState("today");
   const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [customTo, setCustomTo]     = useState("");
+  const [loading, setLoading]       = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
-  const [refreshing, setRefreshing] = useState(false);
-
-  // Live power ticks every 30s independently from the full load
-  const [livePower, setLivePower] = useState<number | null>(null);
+  const [refreshing, setRefreshing]   = useState(false);
+  const [livePower, setLivePower]     = useState<number | null>(null);
   const liveTimerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
   const loadLivePower = useCallback(async () => {
     try {
-      const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
-      const res = await fetch(`${API_BASE}/api/dashboard/summary`, { cache: "no-store" });
-      if (res.ok) {
-        const d = await res.json();
-        setLivePower(d.power_now_w ?? 0);
-      }
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? ""}/api/dashboard/summary`, { cache: "no-store" });
+      if (res.ok) { const d = await res.json(); setLivePower(d.power_now_w ?? 0); }
     } catch {}
   }, []);
 
   const load = useCallback(async () => {
     setRefreshing(true);
     try {
+      const API = process.env.NEXT_PUBLIC_API_URL ?? "";
       const fromParam = chartRange === "custom" ? customFrom : undefined;
       const toParam   = chartRange === "custom" ? customTo   : undefined;
-      const [s, c, sc] = await Promise.all([
+      const [s, c, sc, an, cl] = await Promise.all([
         fetchDashboardSummary(),
         fetchDailyChart(chartRange, fromParam, toParam),
         fetchHealthScorecard(),
+        fetch(`${API}/api/analysis?days=7`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`${API}/api/cleaning`).then(r => r.ok ? r.json() : null).catch(() => null),
       ]);
       setSummary(s);
       setLivePower(s.power_now_w ?? 0);
       setChart(c);
       setScorecard(sc);
+      setAnalysis(an);
+      setCleaning(cl);
       setLastRefresh(new Date());
     } catch (e) {
       console.error(e);
@@ -285,27 +375,17 @@ export default function Dashboard() {
     }
   }, [chartRange, customFrom, customTo]);
 
-  // Full reload on range change
   useEffect(() => { load(); }, [load]);
-
-  // Full reload every 5 min
-  useEffect(() => {
-    const t = setInterval(load, 300000);
-    return () => clearInterval(t);
-  }, [load]);
-
-  // Live power tick every 30 s
+  useEffect(() => { const t = setInterval(load, 300000); return () => clearInterval(t); }, [load]);
   useEffect(() => {
     liveTimerRef.current = setInterval(loadLivePower, 30000);
     return () => clearInterval(liveTimerRef.current);
   }, [loadLivePower]);
 
-  const power = livePower ?? summary?.power_now_w ?? 0;
-  const health = summary?.health_score ?? 0;
+  const power       = livePower ?? summary?.power_now_w ?? 0;
+  const health      = summary?.health_score ?? 0;
   const healthColor = health >= 80 ? "text-emerald-500" : health >= 60 ? "text-amber-500" : "text-red-500";
-
-  // Sunset-aware: determine if offline is because of night
-  const night = isNighttime(summary?.sunrise, summary?.sunset);
+  const night       = isNighttime(summary?.sunrise, summary?.sunset);
 
   if (loading) {
     return (
@@ -359,18 +439,17 @@ export default function Dashboard() {
         <StatCard label="Total Generated" value={`${((summary?.total_energy_kwh ?? 0) / 1000).toFixed(1)} MWh`} sub="Since installation" icon={TrendingUp} color="purple" />
       </div>
 
-      {/* Generation chart with extended time range controls */}
+      {/* Generation chart */}
       <div className="glass-card rounded-2xl p-5">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4 relative">
           <h2 className="font-semibold" style={{ color: "var(--card-title)" }}>Generation Chart</h2>
-          <ChartRangeBar
-            range={chartRange} setRange={setChartRange}
-            from={customFrom} to={customTo}
-            setFrom={setCustomFrom} setTo={setCustomTo}
-          />
+          <ChartRangeBar range={chartRange} setRange={setChartRange} from={customFrom} to={customTo} setFrom={setCustomFrom} setTo={setCustomTo} />
         </div>
         <GenerationChart data={chart?.data ?? []} />
       </div>
+
+      {/* ── 7-day Performance section ─────────────────────────────────────────── */}
+      <PerformanceSection analysis={analysis} cleaning={cleaning} isDark={isDark} />
 
       {/* Health Scorecard */}
       <div className="glass-card rounded-2xl p-5">
@@ -430,10 +509,10 @@ export default function Dashboard() {
         <h2 className="font-semibold mb-4" style={{ color: "var(--card-title)" }}>Current Conditions</h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: "W/m² irradiance", value: `${summary?.solar_radiation_wm2?.toFixed(0) ?? "—"}`, icon: Sun, iconClass: "text-amber-500", bg: "bg-amber-500/10 border-amber-500/20" },
-            { label: "cloud cover",     value: `${summary?.cloud_cover_pct?.toFixed(0) ?? "—"}%`, icon: Cloud, iconClass: "text-blue-500", bg: "bg-blue-500/10 border-blue-500/20" },
-            { label: "inverter temp",   value: `${summary?.inverter_temp_c?.toFixed(0) ?? "—"}°C`, icon: Thermometer, iconClass: "text-red-500", bg: "bg-red-500/10 border-red-500/20" },
-            { label: "health score",    value: `${summary?.health_score ?? "—"}/100`, icon: Activity, iconClass: "text-emerald-500", bg: "bg-emerald-500/10 border-emerald-500/20" },
+            { label: "W/m² irradiance", value: `${summary?.solar_radiation_wm2?.toFixed(0) ?? "—"}`,    icon: Sun,         iconClass: "text-amber-500",   bg: "bg-amber-500/10 border-amber-500/20" },
+            { label: "cloud cover",     value: `${summary?.cloud_cover_pct?.toFixed(0) ?? "—"}%`,        icon: Cloud,       iconClass: "text-blue-500",    bg: "bg-blue-500/10 border-blue-500/20" },
+            { label: "inverter temp",   value: `${summary?.inverter_temp_c?.toFixed(0) ?? "—"}°C`,       icon: Thermometer, iconClass: "text-red-500",     bg: "bg-red-500/10 border-red-500/20" },
+            { label: "health score",    value: `${summary?.health_score ?? "—"}/100`,                    icon: Activity,    iconClass: "text-emerald-500", bg: "bg-emerald-500/10 border-emerald-500/20" },
           ].map(({ label, value, icon: Icon, iconClass, bg }) => (
             <div key={label} className="flex items-center gap-3">
               <div className={`w-9 h-9 rounded-xl ${bg} border flex items-center justify-center`}>
