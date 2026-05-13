@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Sun, Zap, GitBranch, AlertTriangle, Grid, Thermometer, Wrench, TrendingUp, Cloud, FileText, Bell, Settings, Menu, X, Moon } from "lucide-react";
+import { Sun, Zap, GitBranch, AlertTriangle, Grid, Thermometer, Wrench, TrendingUp, Cloud, FileText, Bell, Settings, Menu, X, Moon, BarChart2 } from "lucide-react";
 import { useState } from "react";
 import { useTheme } from "next-themes";
 
@@ -13,6 +13,7 @@ const nav = [
   { href: "/grid", label: "Grid Quality", icon: Grid },
   { href: "/thermal", label: "Thermal", icon: Thermometer },
   { href: "/maintenance", label: "Maintenance", icon: Wrench },
+  { href: "/analysis",   label: "Performance Analysis", icon: BarChart2 },
   { href: "/performance", label: "Performance", icon: TrendingUp },
   { href: "/weather", label: "Weather Context", icon: Cloud },
   { href: "/reports", label: "Reports", icon: FileText },
