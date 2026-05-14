@@ -41,14 +41,14 @@ function StatCard({ label, value, sub, icon: Icon, color = "emerald" }: any) {
   };
   const c = colors[color];
   return (
-    <div className={`glass-card rounded-2xl p-5 border ${c.border} ${c.bg} flex flex-col gap-3`}>
+    <div className={`glass-card rounded-2xl p-4 border ${c.border} ${c.bg} flex flex-col gap-2`}>
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium" style={{ color: "var(--card-label)" }}>{label}</span>
-        <div className={`w-8 h-8 rounded-xl ${c.bg} border ${c.border} flex items-center justify-center`}>
-          <Icon className={`w-4 h-4 ${c.icon}`} />
+        <span className="text-xs font-medium" style={{ color: "var(--card-label)" }}>{label}</span>
+        <div className={`w-7 h-7 rounded-lg ${c.bg} border ${c.border} flex items-center justify-center`}>
+          <Icon className={`w-3.5 h-3.5 ${c.icon}`} />
         </div>
       </div>
-      <div className={`text-3xl font-bold ${c.gradient}`}>{value}</div>
+      <div className={`text-2xl font-bold ${c.gradient}`}>{value}</div>
       {sub && <div className="text-xs" style={{ color: "var(--card-sub)" }}>{sub}</div>}
     </div>
   );
@@ -66,11 +66,11 @@ function HeroCard({ power, capacity_pct, status, night }: any) {
     : "System offline — check inverter";
 
   return (
-    <div className={`glass-card rounded-2xl p-6 border ${isGenerating ? "border-emerald-500/25" : "border-slate-700/50"} relative overflow-hidden`}>
+    <div className={`glass-card rounded-2xl p-5 border ${isGenerating ? "border-emerald-500/25" : "border-slate-700/50"} relative overflow-hidden`}>
       {isGenerating && (
         <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-transparent pointer-events-none" />
       )}
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex items-start justify-between mb-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className={`w-2 h-2 rounded-full ${isGenerating ? "pulse-green bg-emerald-400" : isNight ? "bg-indigo-400" : "bg-slate-500"}`} />
@@ -80,17 +80,17 @@ function HeroCard({ power, capacity_pct, status, night }: any) {
           </div>
           <div className="text-sm font-medium" style={{ color: "var(--card-label)" }}>Current Output</div>
         </div>
-        <Sun className={`w-6 h-6 ${isGenerating ? "text-emerald-400" : isNight ? "text-indigo-300" : "text-slate-500"}`} />
+        <Sun className={`w-5 h-5 ${isGenerating ? "text-emerald-400" : isNight ? "text-indigo-300" : "text-slate-500"}`} />
       </div>
 
-      <div className="flex items-end gap-6 mb-6">
+      <div className="flex items-end gap-5 mb-4">
         <div>
-          <div className={`text-6xl font-black tracking-tight ${isGenerating ? "number-gradient" : "text-slate-500"}`}>
+          <div className={`text-5xl font-black tracking-tight ${isGenerating ? "number-gradient" : "text-slate-500"}`}>
             {power >= 1000 ? `${(power / 1000).toFixed(2)}` : `${power.toFixed(0)}`}
           </div>
-          <div className="text-slate-400 text-lg font-medium mt-1">{power >= 1000 ? "kW" : "W"}</div>
+          <div className="text-slate-400 text-base font-medium mt-1">{power >= 1000 ? "kW" : "W"}</div>
         </div>
-        <div className="relative w-24 h-24">
+        <div className="relative w-20 h-20">
           <svg viewBox="0 0 80 80" className="w-full h-full -rotate-90">
             <circle cx="40" cy="40" r="32" fill="none" stroke="#1e293b" strokeWidth="8" />
             <circle
@@ -108,7 +108,7 @@ function HeroCard({ power, capacity_pct, status, night }: any) {
           </div>
         </div>
       </div>
-      <div className="text-xs" style={{ color: "var(--card-sub)" }}>{statusNote}</div>
+      <div className="text-xs mt-2" style={{ color: "var(--card-sub)" }}>{statusNote}</div>
     </div>
   );
 }

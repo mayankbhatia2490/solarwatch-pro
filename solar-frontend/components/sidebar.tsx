@@ -1,8 +1,8 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Sun, Activity, Wrench, Settings, Menu, X, Moon, CalendarDays, Cloud, CloudSun, CloudDrizzle, Zap } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Sun, Activity, Wrench, Settings, Menu, X, Moon, CalendarDays } from "lucide-react";
+import { useState } from "react";
 import { useTheme } from "next-themes";
 
 const nav = [
@@ -12,52 +12,6 @@ const nav = [
   { href: "/maintenance", label: "Maintenance", icon: Wrench },
   { href: "/settings",  label: "Settings",     icon: Settings },
 ];
-
-function WeatherWidget() {
-  const [wx, setWx] = useState<any>(null);
-
-  useEffect(() => {
-    const load = () =>
-      fetch("/api/weather")
-        .then(r => r.ok ? r.json() : null)
-        .then(d => setWx(d))
-        .catch(() => {});
-    load();
-    const t = setInterval(load, 5 * 60 * 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  if (!wx?.data?.current) return null;
-
-  const cur   = wx.data.current;
-  const cloud = cur.cloud_cover ?? 0;
-  const temp  = cur.temperature_2m ?? null;
-  const expW  = wx.data.expected_power_w ?? null;
-
-  const SkyIcon  = cloud < 15 ? Sun : cloud < 40 ? CloudSun : cloud < 70 ? Cloud : CloudDrizzle;
-  const skyColor = cloud < 15 ? "text-amber-400" : cloud < 40 ? "text-amber-300" : cloud < 70 ? "text-slate-400" : "text-blue-400";
-
-  return (
-    <div className="mx-4 mb-3 px-3 py-2 rounded-xl border flex items-center justify-between transition-all duration-200"
-      style={{ background: "var(--bg-surface-2)", borderColor: "var(--bg-border)" }}>
-      <div className="flex items-center gap-1.5">
-        <SkyIcon className={`w-3.5 h-3.5 flex-shrink-0 ${skyColor}`} />
-        <span className="text-xs font-medium" style={{ color: "var(--card-value)" }}>
-          {temp != null ? `${temp.toFixed(0)}°C` : "—"}
-        </span>
-        <span className="text-xs" style={{ color: "var(--text-muted)" }}>· {cloud}%</span>
-      </div>
-      {expW != null && (
-        <div className="flex items-center gap-1 text-emerald-400">
-          <Zap className="w-3 h-3" />
-          <span className="text-xs font-semibold">
-            {expW >= 1000 ? `${(expW / 1000).toFixed(1)}kW` : `${expW.toFixed(0)}W`}
-          </span>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function Sidebar() {
   const path = usePathname();
@@ -94,7 +48,7 @@ export function Sidebar() {
       {/* Sidebar */}
       <aside className={`fixed top-0 left-0 z-40 h-full w-64 bg-[var(--sidebar-bg)] border-r border-[var(--sidebar-border)] flex flex-col transition-transform duration-300 ${open ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}>
         {/* Logo + theme toggle */}
-        <div className="flex items-center justify-between px-5 py-6 border-b border-[var(--sidebar-border)]">
+        <div className="flex items-center justify-between px-5 py-5 border-b border-[var(--sidebar-border)]">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-400 to-green-600 flex items-center justify-center shadow-lg shadow-emerald-900/40">
               <Sun className="w-5 h-5 text-white" />
@@ -114,13 +68,10 @@ export function Sidebar() {
         </div>
 
         {/* Live indicator */}
-        <div className="mx-4 mt-4 mb-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2">
+        <div className="mx-4 mt-4 mb-3 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2">
           <span className="pulse-green w-2 h-2 rounded-full bg-emerald-400 inline-block" />
           <span className="text-xs text-emerald-400 font-medium">Live Monitoring Active</span>
         </div>
-
-        {/* Weather widget — always visible */}
-        <WeatherWidget />
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
