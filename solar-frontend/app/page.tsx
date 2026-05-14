@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
-import { Sun, Zap, IndianRupee, Leaf, Activity, Thermometer, Wind, Cloud, RefreshCw, TrendingUp, TrendingDown, AlertCircle, CheckCircle, AlertTriangle, Calendar, Droplets, Sparkles } from "lucide-react";
+import { Sun, Zap, IndianRupee, Leaf, Activity, Thermometer, Cloud, CloudSun, CloudDrizzle, RefreshCw, TrendingUp, AlertCircle, CheckCircle, AlertTriangle, Calendar, Droplets } from "lucide-react";
 import { GenerationChart } from "@/components/generation-chart";
 import { SmartSuggestions } from "@/components/smart-suggestions";
 import { fetchDashboardSummary, fetchDailyChart, fetchHealthScorecard } from "@/lib/api";
@@ -206,6 +206,41 @@ function ChartRangeBar({ range, setRange, from, to, setFrom, setTo }: any) {
   );
 }
 
+// ── Weather pill (header) ─────────────────────────────────────────────────────
+
+function WeatherPill({ wx }: { wx: any }) {
+  if (!wx?.data?.current) return null;
+
+  const cur   = wx.data.current;
+  const cloud = cur.cloud_cover ?? 0;
+  const temp  = cur.temperature_2m ?? null;
+  const irr   = wx.data.solar_radiation_wm2 ?? cur.shortwave_radiation ?? null;
+  const expW  = wx.data.expected_power_w ?? null;
+
+  const SkyIcon  = cloud < 15 ? Sun : cloud < 40 ? CloudSun : cloud < 70 ? Cloud : CloudDrizzle;
+  const skyColor = cloud < 15 ? "text-amber-400" : cloud < 40 ? "text-amber-300" : cloud < 70 ? "text-slate-400" : "text-blue-400";
+
+  const items = [
+    { Icon: SkyIcon,     value: temp  != null ? `${temp.toFixed(0)}°C` : "—",                                    color: skyColor,         label: "outdoor" },
+    { Icon: Cloud,       value: `${cloud}%`,                                                                       color: "text-blue-400",  label: "cloud"   },
+    { Icon: Zap,         value: irr   != null ? `${irr.toFixed(0)} W/m²` : "—",                                  color: "text-amber-400", label: "irr"     },
+    { Icon: TrendingUp,  value: expW  != null ? (expW >= 1000 ? `${(expW/1000).toFixed(1)} kW` : `${expW.toFixed(0)} W`) : "—", color: "text-emerald-400", label: "exp" },
+  ];
+
+  return (
+    <div className="hidden sm:flex items-center gap-0 rounded-2xl overflow-hidden border transition-all duration-200"
+      style={{ background: "var(--bg-surface-2)", borderColor: "var(--bg-border)" }}>
+      {items.map(({ Icon, value, color, label }, i) => (
+        <div key={label} className="flex items-center gap-1.5 px-3 py-2">
+          {i > 0 && <div className="w-px h-3.5 mr-3" style={{ background: "var(--bg-border)" }} />}
+          <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${color}`} />
+          <span className="text-xs font-medium" style={{ color: "var(--card-value)" }}>{value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Performance section ────────────────────────────────────────────────────────
 
 function PerformanceSection({ analysis, cleaning, isDark }: { analysis: any; cleaning: any; isDark: boolean }) {
@@ -331,6 +366,7 @@ export default function Dashboard() {
   const [scorecard, setScorecard] = useState<any>(null);
   const [analysis, setAnalysis]   = useState<any>(null);
   const [cleaning, setCleaning]   = useState<any>(null);
+  const [weather, setWeather]     = useState<any>(null);
   const [chartRange, setChartRange] = useState("today");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo]     = useState("");
@@ -353,12 +389,13 @@ export default function Dashboard() {
       const API = process.env.NEXT_PUBLIC_API_URL ?? "";
       const fromParam = chartRange === "custom" ? customFrom : undefined;
       const toParam   = chartRange === "custom" ? customTo   : undefined;
-      const [s, c, sc, an, cl] = await Promise.all([
+      const [s, c, sc, an, cl, wx] = await Promise.all([
         fetchDashboardSummary(),
         fetchDailyChart(chartRange, fromParam, toParam),
         fetchHealthScorecard(),
         fetch(`${API}/api/analysis?days=7`).then(r => r.ok ? r.json() : null).catch(() => null),
         fetch(`${API}/api/cleaning`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`${API}/api/weather`).then(r => r.ok ? r.json() : null).catch(() => null),
       ]);
       setSummary(s);
       setLivePower(s.power_now_w ?? 0);
@@ -366,6 +403,7 @@ export default function Dashboard() {
       setScorecard(sc);
       setAnalysis(an);
       setCleaning(cl);
+      setWeather(wx);
       setLastRefresh(new Date());
     } catch (e) {
       console.error(e);
@@ -402,20 +440,26 @@ export default function Dashboard() {
   return (
     <div className="pt-16 lg:pt-0 space-y-5 max-w-7xl">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: "var(--card-value)" }}>Dashboard</h1>
           <p className="text-sm mt-0.5" style={{ color: "var(--card-sub)" }}>
             Last updated {lastRefresh.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="px-3 py-1.5 rounded-xl glass-card flex items-center gap-2">
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Weather pill — all params, SVG icons, glassmorphism */}
+          <WeatherPill wx={weather} />
+          {/* Health badge */}
+          <div className="px-3 py-2 rounded-2xl glass-card border flex items-center gap-2 transition-all duration-200"
+            style={{ borderColor: "var(--bg-border)" }}>
+            <Activity className={`w-3.5 h-3.5 ${healthColor}`} />
             <span className="text-xs" style={{ color: "var(--card-label)" }}>Health</span>
             <span className={`text-sm font-bold ${healthColor}`}>{health}/100</span>
           </div>
-          <button onClick={load} disabled={refreshing}
-            className="p-2 rounded-xl glass-card text-slate-400 hover:text-slate-200 transition-colors">
+          <button onClick={load} disabled={refreshing} title="Refresh"
+            className="p-2 rounded-xl glass-card border text-slate-400 hover:text-slate-200 transition-all duration-200 cursor-pointer disabled:cursor-not-allowed"
+            style={{ borderColor: "var(--bg-border)" }}>
             <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
           </button>
         </div>

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Sun, Activity, TrendingUp, Wrench, Settings, Menu, X, Moon, CalendarDays } from "lucide-react";
+import { Sun, Activity, Wrench, Settings, Menu, X, Moon, CalendarDays, Cloud, CloudSun, CloudDrizzle, Zap } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 
@@ -29,30 +29,30 @@ function WeatherWidget() {
 
   if (!wx?.data?.current) return null;
 
-  const cur      = wx.data.current;
-  const cloud    = cur.cloud_cover ?? 0;
-  const temp     = cur.temperature_2m;
-  const irr      = wx.data.solar_radiation_wm2 ?? cur.shortwave_radiation ?? null;
-  const expW     = wx.data.expected_power_w ?? null;
-  const skyIcon  = cloud < 15 ? "☀️" : cloud < 40 ? "🌤️" : cloud < 70 ? "⛅" : "☁️";
+  const cur   = wx.data.current;
+  const cloud = cur.cloud_cover ?? 0;
+  const temp  = cur.temperature_2m ?? null;
+  const expW  = wx.data.expected_power_w ?? null;
+
+  const SkyIcon  = cloud < 15 ? Sun : cloud < 40 ? CloudSun : cloud < 70 ? Cloud : CloudDrizzle;
+  const skyColor = cloud < 15 ? "text-amber-400" : cloud < 40 ? "text-amber-300" : cloud < 70 ? "text-slate-400" : "text-blue-400";
 
   return (
-    <div className="mx-4 mb-3 px-3 py-2.5 rounded-xl border text-xs space-y-1.5"
+    <div className="mx-4 mb-3 px-3 py-2 rounded-xl border flex items-center justify-between transition-all duration-200"
       style={{ background: "var(--bg-surface-2)", borderColor: "var(--bg-border)" }}>
-      <div className="flex items-center justify-between">
-        <span className="font-medium" style={{ color: "var(--card-value)" }}>
-          {skyIcon} {temp != null ? `${temp.toFixed(0)}°C` : "—"}
+      <div className="flex items-center gap-1.5">
+        <SkyIcon className={`w-3.5 h-3.5 flex-shrink-0 ${skyColor}`} />
+        <span className="text-xs font-medium" style={{ color: "var(--card-value)" }}>
+          {temp != null ? `${temp.toFixed(0)}°C` : "—"}
         </span>
-        <span style={{ color: "var(--text-muted)" }}>{cloud}% cloud</span>
+        <span className="text-xs" style={{ color: "var(--text-muted)" }}>· {cloud}%</span>
       </div>
-      {irr != null && (
-        <div style={{ color: "var(--text-secondary)" }}>
-          ☀ {irr.toFixed(0)} W/m² irradiance
-        </div>
-      )}
       {expW != null && (
-        <div className="font-semibold text-emerald-400">
-          ⚡ {expW >= 1000 ? `${(expW / 1000).toFixed(1)} kW` : `${expW.toFixed(0)} W`} expected now
+        <div className="flex items-center gap-1 text-emerald-400">
+          <Zap className="w-3 h-3" />
+          <span className="text-xs font-semibold">
+            {expW >= 1000 ? `${(expW / 1000).toFixed(1)}kW` : `${expW.toFixed(0)}W`}
+          </span>
         </div>
       )}
     </div>
