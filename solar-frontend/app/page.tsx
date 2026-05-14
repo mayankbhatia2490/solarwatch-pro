@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
-import { Sun, Zap, IndianRupee, Leaf, Activity, Thermometer, Cloud, CloudSun, CloudDrizzle, RefreshCw, TrendingUp, AlertCircle, CheckCircle, AlertTriangle, Calendar, Droplets } from "lucide-react";
+import { Sun, Zap, IndianRupee, Leaf, Activity, Cloud, CloudSun, CloudDrizzle, RefreshCw, TrendingUp, AlertCircle, CheckCircle, AlertTriangle, Calendar, Droplets } from "lucide-react";
 import { GenerationChart } from "@/components/generation-chart";
 import { SmartSuggestions } from "@/components/smart-suggestions";
 import { fetchDashboardSummary, fetchDailyChart, fetchHealthScorecard } from "@/lib/api";
@@ -466,21 +466,18 @@ export default function Dashboard() {
       </div>
 
       {/* Hero + Stats grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         <div className="lg:col-span-2">
           <HeroCard power={power} capacity_pct={summary?.capacity_pct ?? 0} status={summary?.status ?? "offline"} night={night} />
         </div>
-        <div className="space-y-4">
-          <StatCard label="Today's Generation" value={`${(summary?.energy_today_kwh ?? 0).toFixed(1)} kWh`} sub="Total energy produced today" icon={Zap} color="blue" />
-          <StatCard label="Today's Savings" value={`₹${(summary?.savings_today_inr ?? 0).toFixed(0)}`} sub="At ₹6.5/kWh tariff" icon={IndianRupee} color="amber" />
+        <div className="lg:col-span-3 grid grid-cols-2 lg:grid-cols-3 gap-4">
+          <StatCard label="Today's Generation" value={`${(summary?.energy_today_kwh ?? 0).toFixed(1)} kWh`} icon={Zap} color="blue" />
+          <StatCard label="Today's Savings" value={`₹${(summary?.savings_today_inr ?? 0).toFixed(0)}`} sub="Electricity offset today" icon={IndianRupee} color="amber" />
+          <StatCard label="This Month" value={`₹${(summary?.savings_month_inr ?? 0).toLocaleString("en-IN")}`} sub="Month-to-date savings" icon={IndianRupee} color="amber" />
+          <StatCard label="Total Generated" value={`${((summary?.total_energy_kwh ?? 0) / 1000).toFixed(2)} MWh`} sub="Since installation" icon={TrendingUp} color="purple" />
+          <StatCard label="CO₂ Avoided" value={`${(summary?.co2_total_kg ?? 0).toFixed(0)} kg`} sub={`≈ ${summary?.trees_equivalent ?? 0} trees`} icon={Leaf} color="emerald" />
+          <StatCard label="Payback" value={`${(summary?.payback_pct ?? 0).toFixed(1)}%`} sub={`₹${(summary?.savings_total_inr ?? 0).toLocaleString("en-IN")} of ₹${(summary?.system_cost_inr ?? 190000).toLocaleString("en-IN")}`} icon={TrendingUp} color="blue" />
         </div>
-      </div>
-
-      {/* Savings summary */}
-      <div className="grid grid-cols-3 gap-4">
-        <StatCard label="This Month" value={`₹${(summary?.savings_month_inr ?? 0).toLocaleString("en-IN")}`} icon={IndianRupee} color="amber" />
-        <StatCard label="CO₂ Saved" value={`${(summary?.co2_total_kg ?? 0).toFixed(0)} kg`} sub={`${summary?.trees_equivalent ?? 0} trees equivalent`} icon={Leaf} color="emerald" />
-        <StatCard label="Total Generated" value={`${((summary?.total_energy_kwh ?? 0) / 1000).toFixed(1)} MWh`} sub="Since installation" icon={TrendingUp} color="purple" />
       </div>
 
       {/* Generation chart */}
@@ -515,18 +512,19 @@ export default function Dashboard() {
             <Leaf className="w-4 h-4 text-emerald-500" />
             <h2 className="font-semibold" style={{ color: "var(--card-title)" }}>Environmental Impact</h2>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <div className="text-2xl font-bold number-gradient">{(summary?.co2_today_kg ?? 0).toFixed(1)} kg</div>
-              <div className="text-xs mt-1" style={{ color: "var(--card-sub)" }}>CO₂ offset today</div>
+              <div className="text-xs mt-1" style={{ color: "var(--card-sub)" }}>CO₂ today</div>
             </div>
             <div>
               <div className="text-2xl font-bold number-gradient">{(summary?.co2_total_kg ?? 0).toFixed(0)} kg</div>
-              <div className="text-xs mt-1" style={{ color: "var(--card-sub)" }}>CO₂ offset total</div>
+              <div className="text-xs mt-1" style={{ color: "var(--card-sub)" }}>CO₂ total</div>
             </div>
-          </div>
-          <div className="mt-4 text-xs italic" style={{ color: "var(--card-sub)" }}>
-            Equivalent to planting {summary?.trees_equivalent ?? 0} trees 🌳
+            <div>
+              <div className="text-2xl font-bold number-gradient">{summary?.trees_equivalent ?? 0}</div>
+              <div className="text-xs mt-1" style={{ color: "var(--card-sub)" }}>trees equivalent</div>
+            </div>
           </div>
         </div>
 
@@ -537,7 +535,7 @@ export default function Dashboard() {
           </div>
           <PaybackBar
             recovered={summary?.savings_total_inr ?? 0}
-            total={summary?.system_cost_inr ?? 220000}
+            total={summary?.system_cost_inr ?? 190000}
             pct={summary?.payback_pct ?? 0}
           />
           {summary?.years_to_payback > 0 && (
@@ -548,28 +546,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Current Conditions */}
-      <div className="glass-card rounded-2xl p-5">
-        <h2 className="font-semibold mb-4" style={{ color: "var(--card-title)" }}>Current Conditions</h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { label: "W/m² irradiance", value: `${summary?.solar_radiation_wm2?.toFixed(0) ?? "—"}`,    icon: Sun,         iconClass: "text-amber-500",   bg: "bg-amber-500/10 border-amber-500/20" },
-            { label: "cloud cover",     value: `${summary?.cloud_cover_pct?.toFixed(0) ?? "—"}%`,        icon: Cloud,       iconClass: "text-blue-500",    bg: "bg-blue-500/10 border-blue-500/20" },
-            { label: "inverter temp",   value: `${summary?.inverter_temp_c?.toFixed(0) ?? "—"}°C`,       icon: Thermometer, iconClass: "text-red-500",     bg: "bg-red-500/10 border-red-500/20" },
-            { label: "health score",    value: `${summary?.health_score ?? "—"}/100`,                    icon: Activity,    iconClass: "text-emerald-500", bg: "bg-emerald-500/10 border-emerald-500/20" },
-          ].map(({ label, value, icon: Icon, iconClass, bg }) => (
-            <div key={label} className="flex items-center gap-3">
-              <div className={`w-9 h-9 rounded-xl ${bg} border flex items-center justify-center`}>
-                <Icon className={`w-4 h-4 ${iconClass}`} />
-              </div>
-              <div>
-                <div className="text-lg font-bold" style={{ color: "var(--card-value)" }}>{value}</div>
-                <div className="text-xs" style={{ color: "var(--card-sub)" }}>{label}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }

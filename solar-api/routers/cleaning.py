@@ -55,7 +55,7 @@ def _save_log(log: list[dict]):
 def _avg_efficiency(start: str, stop: str) -> float | None:
     """
     Average (actual_power / expected_power) for clear-sky daytime hours
-    (expected > 200W, radiation > 300 W/m²) in the given date range.
+    (expected > 200W, radiation > 600 W/m²) in the given date range.
     Returns None if insufficient data.
     """
     flux = f'''
@@ -66,7 +66,7 @@ from(bucket: "{BUCKET}")
                         r["_field"] == "shortwave_radiation_wm2")
   |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
   |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
-  |> filter(fn: (r) => r["expected_power_w"] > 200.0 and r["shortwave_radiation_wm2"] > 300.0)
+  |> filter(fn: (r) => r["expected_power_w"] > 200.0 and r["shortwave_radiation_wm2"] > 600.0)
 '''
     recs = query(flux)
     if len(recs) < 10:  # need at least 10 clear-sky hours for a meaningful average
