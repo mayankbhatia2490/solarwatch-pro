@@ -57,8 +57,19 @@ ELECTRICITY_TARIFF_INR = float(os.environ.get('ELECTRICITY_TARIFF_INR', '6.5'))
 # Source: Vikram Solar datasheet VSL/ENG/SC/325-V02/STD
 TEMP_COEFF_PER_C   = -0.0030   # γ (Pmax): -0.30%/°C  (N-type advantage over -0.38% PERC)
 NOCT               = 45.0       # °C ± 2°C (IEC standard, from datasheet)
-BIFACIAL_REAR_GAIN = 0.07       # 7% conservative rear irradiance for Indian rooftop
-                                 # (BNPI φ=0.135=13.5%; real rooftop ~5-10% depending on albedo)
+BIFACIAL_REAR_GAIN = 0.09       # 9% rear irradiance — 5° tilt on concrete roof with good albedo
+                                 # (BNPI φ=0.135; actual rear gain ~8-12% at low tilt/high albedo)
+
+# Panel mounting geometry — measured on-site
+# Low side 118cm, high side 160cm, panel slant 460cm → tilt = arcsin(42/460) ≈ 5.2°
+PANEL_TILT    = 5    # degrees from horizontal (south-facing, near-flat rooftop mount)
+PANEL_AZIMUTH = 0    # 0 = true south (Open-Meteo convention)
+
+# System Performance Ratio — Vikram N-type bifacial, new/clean installation
+# Inverter η≈97% × DC wire≈98.5% × AC wire≈99.5% × mismatch≈99% × soiling≈99% ≈ 0.93
+# Conservative operating PR (includes partial cloud, light soiling): 0.83
+# (0.78 = aged/average India average; not appropriate for new N-type bifacial)
+SYSTEM_PR = float(os.environ.get('SYSTEM_PR', '0.83'))
 
 # Alerting State
 ALARM_STATE = {
