@@ -31,7 +31,7 @@
 <body>
 
 <h1>Solar Panel Tilt Analysis — Karnal, Haryana (29.7°N)</h1>
-<div class="sub">Based on measured geometry: panel slant 460 cm, low side 118 cm, high side 160 cm → tilt = arcsin(42/460) = 5.2°</div>
+<div class="sub">Based on measured geometry: panel slant 460 cm, low side 118 cm, high side 160 cm → tilt = arcsin(42/460) = 5.2° &nbsp;·&nbsp; GHI from Open-Meteo Archive (actual 2025, validated)</div>
 
 <div class="grid">
 
@@ -174,19 +174,8 @@
       Rise = 460 × sin(tilt°) &nbsp;·&nbsp; High side = low side (118cm) + rise<br>
       Assumes low side stays at 118cm.
     </p>
-    <div class="stats-row">
-      <div class="stat">
-        <div class="stat-val" style="color:#22c55e">+295 kWh</div>
-        <div class="stat-lbl">extra per year at 28°</div>
-      </div>
-      <div class="stat">
-        <div class="stat-val" style="color:#fbbf24">≈ ₹2,270</div>
-        <div class="stat-lbl">extra savings/year</div>
-      </div>
-      <div class="stat">
-        <div class="stat-val" style="color:#60a5fa">−8–10°C</div>
-        <div class="stat-lbl">cooler module temp</div>
-      </div>
+    <div class="stats-row" id="improvementStats">
+      <!-- filled by script -->
     </div>
   </div>
 
@@ -200,13 +189,18 @@
     </div>
     <canvas id="monthlyChart" height="240" style="width:100%"></canvas>
     <p style="font-size:0.75rem;color:#475569;margin-top:10px">
-      Based on NASA/Solargis monthly GHI for Karnal · PR=0.83 · Tilt correction via Liu-Jordan model
+      Based on Open-Meteo Archive actual GHI for Karnal (2025, validated against InfluxDB) · PR=0.83 · Tilt correction via Liu-Jordan model
     </p>
   </div>
 
   <!-- ANNUAL SUMMARY TABLE -->
   <div class="card full">
     <h2>Annual Summary by Tilt Angle</h2>
+    <p style="font-size:0.82rem;color:#94a3b8;margin-bottom:12px">
+      Actual measured generation (InfluxDB, Apr 2025–Apr 2026): <strong style="color:#60a5fa">≈ 4,442 kWh/yr</strong>
+      &nbsp;·&nbsp; Model at 5.2° with archive GHI: <strong id="model5Label" style="color:#ef4444">–</strong>
+      &nbsp;·&nbsp; Gap is normal system losses (wiring, inverter efficiency curve, DC/AC clipping)
+    </p>
     <table>
       <thead>
         <tr>
@@ -228,8 +222,8 @@
 const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const days   = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
-// Monthly GHI (kWh/m²/day) — Karnal, Haryana NASA SSE / Solargis estimate
-const ghi = [3.6, 4.4, 5.6, 6.5, 7.0, 6.2, 4.8, 4.5, 5.2, 5.5, 4.2, 3.4];
+// Monthly GHI (kWh/m²/day) — actual Open-Meteo archive data for Karnal (validated 2025)
+const ghi = [3.03, 4.46, 5.09, 5.96, 5.83, 5.54, 4.98, 4.46, 4.97, 4.27, 3.70, 3.03];
 
 // Tilt correction factors (POA / GHI) for south-facing surface at 29.7°N
 // Based on Liu-Jordan transposition model
@@ -334,6 +328,8 @@ const rows = [
   { label: '15°',            data: data15, total: total15, color: '#f59e0b', base: false },
   { label: '28° (optimal)',  data: data28, total: total28, color: '#22c55e', base: false },
 ];
+const TARIFF = 7.7; // avg blended UHBVN tariff incl. surcharge
+
 rows.forEach(r => {
   const tr = document.createElement('tr');
   const diff = r.total - total5;
@@ -342,10 +338,30 @@ rows.forEach(r => {
   const tdTotal  = `<td style="color:${r.color};font-weight:700">${r.total.toLocaleString()}</td>`;
   const tdDiff   = r.base
     ? `<td style="color:#475569">baseline</td>`
-    : `<td style="color:${r.color};font-weight:600">+${diff} kWh<br><span style="font-size:0.72rem;color:#64748b">≈ ₹${Math.round(diff * 7.7).toLocaleString()}/yr</span></td>`;
+    : `<td style="color:${r.color};font-weight:600">+${diff} kWh<br><span style="font-size:0.72rem;color:#64748b">≈ ₹${Math.round(diff * TARIFF).toLocaleString()}/yr</span></td>`;
   tr.innerHTML = tdLabel + tdMonths + tdTotal + tdDiff;
   tbody.appendChild(tr);
 });
+
+// Model vs actual label
+document.getElementById('model5Label').textContent = total5.toLocaleString() + ' kWh/yr';
+
+// Populate improvement stats
+const gain28 = total28 - total5;
+document.getElementById('improvementStats').innerHTML = `
+  <div class="stat">
+    <div class="stat-val" style="color:#22c55e">+${gain28} kWh</div>
+    <div class="stat-lbl">extra per year at 28°</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val" style="color:#fbbf24">≈ ₹${Math.round(gain28 * TARIFF).toLocaleString()}</div>
+    <div class="stat-lbl">extra savings/year</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val" style="color:#60a5fa">−8–10°C</div>
+    <div class="stat-lbl">cooler module temp</div>
+  </div>
+`;
 </script>
 </body>
 </html>
