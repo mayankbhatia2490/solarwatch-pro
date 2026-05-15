@@ -343,20 +343,29 @@ def fetch_shinemonitor_data():
 
 def fetch_weather_data():
     logger.info("Fetching Open-Meteo data...")
+    # global_tilted_irradiance = POA irradiance on the actual panel surface (5° tilt, south-facing)
+    # shortwave_radiation = GHI (horizontal) — kept for rain/soiling detection and InfluxDB storage
     url = (
         f"https://api.open-meteo.com/v1/forecast"
         f"?latitude={LATITUDE}&longitude={LONGITUDE}"
-        f"&current=temperature_2m,precipitation,cloud_cover,shortwave_radiation,wind_speed_10m"
+        f"&current=temperature_2m,precipitation,cloud_cover,shortwave_radiation,"
+        f"global_tilted_irradiance,wind_speed_10m"
+        f"&tilt={PANEL_TILT}&azimuth={PANEL_AZIMUTH}"
         f"&timezone={TIMEZONE}"
     )
     try:
         r = requests.get(url, timeout=15)
         data = r.json()
         current = data.get('current', {})
+        ghi = current.get('shortwave_radiation', 0) or 0
+        poa = current.get('global_tilted_irradiance', None)
+        # Fall back to GHI if Open-Meteo doesn't return tilted irradiance
+        poa = poa if poa is not None else ghi
         return {
             "temperature_c":           current.get('temperature_2m', 0),
             "cloud_cover_pct":         current.get('cloud_cover', 0),
-            "shortwave_radiation_wm2": current.get('shortwave_radiation', 0),
+            "shortwave_radiation_wm2": ghi,
+            "poa_irradiance_wm2":      poa,
             "precipitation_mm":        current.get('precipitation', 0),
             "wind_speed_kmh":          current.get('wind_speed_10m', 0)
         }
@@ -364,7 +373,7 @@ def fetch_weather_data():
         logger.error(f"Error fetching weather data: {e}")
         return {
             "temperature_c": 0, "cloud_cover_pct": 0,
-            "shortwave_radiation_wm2": 0,
+            "shortwave_radiation_wm2": 0, "poa_irradiance_wm2": 0,
             "precipitation_mm": 0, "wind_speed_kmh": 0
         }
 
@@ -372,19 +381,20 @@ def fetch_weather_data():
 def compute_expected_power(weather):
     """
     Temperature-corrected expected power for Vikram Solar HyperSol N-type bifacial:
-      P = (G/1000) × P_rated × (1 + bifacial_gain) × PR × [1 + γ × (T_cell - 25)]
+      P = (G_poa/1000) × P_rated × (1 + bifacial_gain) × SYSTEM_PR × [1 + γ × (T_cell - 25)]
 
-      T_cell = T_ambient + (NOCT - 20) × G/800   ← IEC NOCT correction (irradiance-scaled)
-      γ      = -0.0030/°C  (Vikram HyperSol datasheet)
+      G_poa  = POA irradiance on tilted panel surface (global_tilted_irradiance from Open-Meteo)
+      T_cell = T_ambient + (NOCT - 20) × G_poa/800   ← IEC NOCT correction (irradiance-scaled)
+      γ      = -0.0030/°C  (Vikram HyperSol N-type datasheet)
       NOCT   = 45°C
-      bifacial_gain = 7% rear irradiance contribution (conservative Indian rooftop)
-      PR     = 0.78 (India standard: wiring, inverter, mismatch losses)
+      bifacial_gain = 9% rear irradiance (5° tilt, concrete roof, good albedo)
+      SYSTEM_PR = 0.83 (new N-type bifacial: wiring+inverter+mismatch losses, no temp)
     """
-    G = weather['shortwave_radiation_wm2']
+    G = weather['poa_irradiance_wm2']          # POA — actual irradiance on panel face
     T_ambient = weather['temperature_c']
     T_cell = T_ambient + (NOCT - 20.0) * (G / 800.0)
     temp_correction = 1 + TEMP_COEFF_PER_C * (T_cell - 25.0)
-    expected = (G / 1000.0) * INSTALLED_CAPACITY_W * (1 + BIFACIAL_REAR_GAIN) * 0.78 * temp_correction
+    expected = (G / 1000.0) * INSTALLED_CAPACITY_W * (1 + BIFACIAL_REAR_GAIN) * SYSTEM_PR * temp_correction
     return max(0.0, round(expected, 1))
 
 
@@ -455,6 +465,7 @@ def job():
             .field("temperature_c",          float(weather['temperature_c']))
             .field("cloud_cover_pct",        float(weather['cloud_cover_pct']))
             .field("shortwave_radiation_wm2",float(weather['shortwave_radiation_wm2']))
+            .field("poa_irradiance_wm2",     float(weather['poa_irradiance_wm2']))
             .field("precipitation_mm",       float(weather['precipitation_mm']))
             .field("wind_speed_kmh",         float(weather['wind_speed_kmh']))
             .field("expected_power_w",       float(expected_power_w))
