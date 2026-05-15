@@ -13,8 +13,8 @@ export function GenerationChart({ data }: GenerationChartProps) {
   const isDark = resolvedTheme === "dark";
 
   const times = data.map(d => new Date(d.time).getTime());
-  const actual = data.map(d => d.power_w);
-  const expected = data.map(d => d.expected_w);
+  const actual = data.map((d, i) => [times[i], d.power_w] as [number, number]);
+  const expected = data.map((d, i) => [times[i], d.expected_w] as [number, number]);
 
   const labelColor  = isDark ? "#64748b" : "#94a3b8";
   const gridColor   = isDark ? "#1e293b" : "#e2e8f0";
@@ -41,7 +41,6 @@ export function GenerationChart({ data }: GenerationChartProps) {
     dataLabels: { enabled: false },
     xaxis: {
       type: "datetime",
-      categories: times,
       labels: { style: { colors: labelColor }, datetimeUTC: false },
       axisBorder: { show: false },
       axisTicks: { show: false },
