@@ -45,7 +45,7 @@ async def get_weather() -> Dict[str, Any]:
         f"https://api.open-meteo.com/v1/forecast"
         f"?latitude={LAT}&longitude={LON}"
         f"&current=temperature_2m,relative_humidity_2m,cloud_cover,wind_speed_10m,"
-        f"global_tilted_irradiance,shortwave_radiation,apparent_temperature,precipitation"
+        f"shortwave_radiation,apparent_temperature,precipitation"
         f"&hourly=temperature_2m,cloud_cover,global_tilted_irradiance,shortwave_radiation"
         f"&daily=sunrise,sunset,uv_index_max,precipitation_sum"
         f"&tilt={PANEL_TILT}&azimuth={PANEL_AZIMUTH}"
@@ -60,9 +60,19 @@ async def get_weather() -> Dict[str, Any]:
                 data = resp.json()
                 current = data.get("current", {})
 
-                # POA irradiance on the actual panel surface (tilted 5°, south-facing)
-                poa_irradiance = current.get("global_tilted_irradiance", 0) or 0
-                ghi             = current.get("shortwave_radiation", 0) or 0
+                ghi = current.get("shortwave_radiation", 0) or 0
+
+                # Extract POA for current hour from hourly data (global_tilted_irradiance
+                # is only available in hourly, not in current endpoint)
+                now_iso  = current.get("time", "")[:13]   # "YYYY-MM-DDTHH"
+                hourly   = data.get("hourly", {})
+                h_times  = hourly.get("time", [])
+                h_poa    = hourly.get("global_tilted_irradiance", [])
+                poa_irradiance = ghi  # fallback to GHI
+                for i, t in enumerate(h_times):
+                    if t.startswith(now_iso) and i < len(h_poa) and h_poa[i] is not None:
+                        poa_irradiance = h_poa[i]
+                        break
 
                 # Expected power: POA × capacity × bifacial gain × PR
                 # Temperature correction is embedded in the collector formula;

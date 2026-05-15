@@ -343,14 +343,15 @@ def fetch_shinemonitor_data():
 
 def fetch_weather_data():
     logger.info("Fetching Open-Meteo data...")
-    # global_tilted_irradiance = POA irradiance on the actual panel surface (5° tilt, south-facing)
-    # shortwave_radiation = GHI (horizontal) — kept for rain/soiling detection and InfluxDB storage
+    # global_tilted_irradiance fetched via hourly (guaranteed supported) + current hour lookup.
+    # shortwave_radiation in current gives real-time GHI for rain/soiling detection.
     url = (
         f"https://api.open-meteo.com/v1/forecast"
         f"?latitude={LATITUDE}&longitude={LONGITUDE}"
-        f"&current=temperature_2m,precipitation,cloud_cover,shortwave_radiation,"
-        f"global_tilted_irradiance,wind_speed_10m"
+        f"&current=temperature_2m,precipitation,cloud_cover,shortwave_radiation,wind_speed_10m"
+        f"&hourly=global_tilted_irradiance"
         f"&tilt={PANEL_TILT}&azimuth={PANEL_AZIMUTH}"
+        f"&forecast_days=1"
         f"&timezone={TIMEZONE}"
     )
     try:
@@ -358,9 +359,18 @@ def fetch_weather_data():
         data = r.json()
         current = data.get('current', {})
         ghi = current.get('shortwave_radiation', 0) or 0
-        poa = current.get('global_tilted_irradiance', None)
-        # Fall back to GHI if Open-Meteo doesn't return tilted irradiance
-        poa = poa if poa is not None else ghi
+
+        # Extract POA for the current hour from hourly data
+        now_iso  = current.get('time', '')[:13]          # "YYYY-MM-DDTHH"
+        hourly   = data.get('hourly', {})
+        h_times  = hourly.get('time', [])
+        h_poa    = hourly.get('global_tilted_irradiance', [])
+        poa = ghi  # default: fall back to GHI if lookup fails
+        for i, t in enumerate(h_times):
+            if t.startswith(now_iso) and i < len(h_poa) and h_poa[i] is not None:
+                poa = h_poa[i]
+                break
+
         return {
             "temperature_c":           current.get('temperature_2m', 0),
             "cloud_cover_pct":         current.get('cloud_cover', 0),
