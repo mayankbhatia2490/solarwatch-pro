@@ -1,20 +1,72 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from influx import query
 from config import settings, solar_bill_savings
 from datetime import datetime, date, timedelta, timezone
 from typing import Optional
 import httpx
+import asyncio
+from cal_utils import calibration_factor
 
 router = APIRouter()
 
-BUCKET = settings.influxdb_bucket
-ORG = settings.influxdb_org
-TARIFF = settings.electricity_tariff_inr
+BUCKET     = settings.influxdb_bucket
+ORG        = settings.influxdb_org
+TARIFF     = settings.electricity_tariff_inr
 CAPACITY_W = settings.installed_capacity_w
-CO2_KG_PER_KWH = 0.82  # India grid emission factor (CEA 2023-24)
+CO2_KG_PER_KWH = 0.82
 
-LAT = getattr(settings, "latitude",  29.6934)
-LON = getattr(settings, "longitude", 76.9994)
+LAT = float(settings.latitude)
+LON = float(settings.longitude)
+
+PANEL_TILT         = 5
+PANEL_AZIMUTH      = 0
+PR                 = 0.83
+BIFACIAL_REAR_GAIN = 0.09
+TEMP_COEFF         = -0.0030
+NOCT               = 45.0
+
+
+def _expected_w(poa: float, temp_c: float, month: int) -> float:
+    T_cell = temp_c + (NOCT - 20.0) * (poa / 800.0)
+    corr   = 1 + TEMP_COEFF * (T_cell - 25.0)
+    cal    = calibration_factor(month)
+    return max(0.0, (poa / 1000.0) * CAPACITY_W * (1 + BIFACIAL_REAR_GAIN) * PR * corr * cal)
+
+
+async def _om_expected_map(past_days: int) -> dict[str, float]:
+    """
+    Fetch Open-Meteo historical hourly GTI + temperature.
+    Returns {iso_hour_str: expected_w} e.g. {"2026-05-10T08:00": 1450.3}
+    Timestamps are in IST (timezone=Asia/Kolkata).
+    """
+    url = (
+        f"https://api.open-meteo.com/v1/forecast"
+        f"?latitude={LAT}&longitude={LON}"
+        f"&hourly=temperature_2m,global_tilted_irradiance"
+        f"&tilt={PANEL_TILT}&azimuth={PANEL_AZIMUTH}"
+        f"&timezone=Asia%2FKolkata"
+        f"&past_days={min(past_days, 92)}&forecast_days=1"
+    )
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            hourly = resp.json().get("hourly", {})
+        result = {}
+        times = hourly.get("time", [])
+        poas  = hourly.get("global_tilted_irradiance", [])
+        temps = hourly.get("temperature_2m", [])
+        for i, t in enumerate(times):
+            poa    = float(poas[i]  or 0) if i < len(poas)  else 0
+            temp_c = float(temps[i] or 30) if i < len(temps) else 30
+            if poa < 10:
+                continue
+            month = int(t[5:7]) if len(t) >= 7 else date.today().month
+            result[t] = round(_expected_w(poa, temp_c, month), 1)
+        return result
+    except Exception as e:
+        print(f"OM expected map error: {e}")
+        return {}
 
 def _latest(field: str) -> float:
     flux = f'''
@@ -190,8 +242,6 @@ from(bucket: "{BUCKET}")
         }
     }
 
-from fastapi import Query
-
 @router.get("/daily-chart")
 async def daily_chart(
     range: str = "today",
@@ -201,56 +251,105 @@ async def daily_chart(
     """
     Generation chart data.
     range: today | yesterday | 7d | 1h | 4h | 8h | 12h | custom
-    from_ / to_: ISO date strings for custom range (YYYY-MM-DD)
+
+    For intra-day ranges (≤12h) both power_now_w and expected_power_w come from
+    InfluxDB — the collector is almost certainly running live.
+
+    For multi-day ranges (7d, yesterday, custom ≥2d) expected_w is computed from
+    Open-Meteo historical irradiance so the expected curve is always complete and
+    bell-shaped regardless of whether the collector had any downtime gaps.
     """
-    # Determine aggregation window based on span
-    if range in ("1h",):
-        start, stop, window = "-1h", "now()", "1m"
+    multi_day = False   # whether to use Open-Meteo for expected
+
+    if range == "1h":
+        start, stop, window, past_days = "-1h",  "now()", "1m",  0
     elif range == "4h":
-        start, stop, window = "-4h", "now()", "5m"
+        start, stop, window, past_days = "-4h",  "now()", "5m",  0
     elif range == "8h":
-        start, stop, window = "-8h", "now()", "5m"
+        start, stop, window, past_days = "-8h",  "now()", "5m",  0
     elif range == "12h":
-        start, stop, window = "-12h", "now()", "10m"
+        start, stop, window, past_days = "-12h", "now()", "10m", 0
     elif range == "today":
         start = f"{date.today().isoformat()}T00:00:00Z"
-        stop, window = "now()", "5m"
+        stop, window, past_days = "now()", "5m", 0
     elif range == "yesterday":
         d = date.today() - timedelta(days=1)
         start = f"{d.isoformat()}T00:00:00Z"
         stop   = f"{date.today().isoformat()}T00:00:00Z"
-        window = "5m"
+        window, past_days, multi_day = "5m", 2, True
     elif range == "7d":
-        start, stop, window = "-7d", "now()", "30m"
+        start, stop, window, past_days, multi_day = "-7d", "now()", "30m", 7, True
     elif range == "custom" and from_ and to_:
-        start  = f"{from_}T00:00:00Z"
-        stop   = f"{to_}T23:59:59Z"
-        # Adaptive window: roughly 300 points
-        days = max((datetime.fromisoformat(to_) - datetime.fromisoformat(from_)).days + 1, 1)
-        mins = days * 24 * 60
-        bucket_mins = max(mins // 300, 5)
-        window = f"{bucket_mins}m"
+        start = f"{from_}T00:00:00Z"
+        stop  = f"{to_}T23:59:59Z"
+        span_days = max((datetime.fromisoformat(to_) - datetime.fromisoformat(from_)).days + 1, 1)
+        bucket_mins = max(span_days * 24 * 60 // 300, 5)
+        window    = f"{bucket_mins}m"
+        past_days = span_days + 1
+        multi_day = span_days >= 2
     else:
-        start, stop, window = "-1d", "now()", "5m"
+        start, stop, window, past_days = "-1d", "now()", "5m", 0
 
     stop_clause = f"|> range(start: {start}, stop: {stop})" if stop != "now()" else f"|> range(start: {start})"
 
+    # ── Fetch actual power from InfluxDB ──────────────────────────────────────
     flux = f'''
+from(bucket: "{BUCKET}")
+  {stop_clause}
+  |> filter(fn: (r) => r["_field"] == "power_now_w")
+  |> aggregateWindow(every: {window}, fn: mean, createEmpty: false)
+'''
+    if multi_day:
+        # Also fetch expected from InfluxDB as fallback only for intra-day ranges
+        flux_both = f'''
+from(bucket: "{BUCKET}")
+  {stop_clause}
+  |> filter(fn: (r) => r["_field"] == "power_now_w")
+  |> aggregateWindow(every: {window}, fn: mean, createEmpty: false)
+'''
+        # Kick off InfluxDB + Open-Meteo concurrently
+        loop = asyncio.get_event_loop()
+        recs, om_map = await asyncio.gather(
+            loop.run_in_executor(None, lambda: query(flux_both)),
+            _om_expected_map(past_days),
+        )
+    else:
+        # Short range: read both fields from InfluxDB (collector always running)
+        flux_short = f'''
 from(bucket: "{BUCKET}")
   {stop_clause}
   |> filter(fn: (r) => r["_field"] == "power_now_w" or r["_field"] == "expected_power_w")
   |> aggregateWindow(every: {window}, fn: mean, createEmpty: false)
   |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
 '''
-    recs = query(flux)
+        loop = asyncio.get_event_loop()
+        recs   = await loop.run_in_executor(None, lambda: query(flux_short))
+        om_map = {}
+
+    # ── Build chart data ──────────────────────────────────────────────────────
+    _IST = timezone(timedelta(hours=5, minutes=30))
     chart_data = []
+
     for r in recs:
+        ts  = r.get_time()
         vals = r.values
+
+        power_w = round(float(vals.get("power_now_w") or 0), 1)
+
+        if multi_day and om_map:
+            # Match this timestamp to the nearest Open-Meteo IST hour
+            ist_dt   = ts.astimezone(_IST)
+            hour_key = ist_dt.strftime("%Y-%m-%dT%H:00")
+            expected_w = om_map.get(hour_key, 0.0)
+        else:
+            expected_w = round(float(vals.get("expected_power_w") or 0), 1)
+
         chart_data.append({
-            "time": r.get_time().isoformat(),
-            "power_w":    round(float(vals.get("power_now_w")    or 0), 1),
-            "expected_w": round(float(vals.get("expected_power_w") or 0), 1),
+            "time":       ts.isoformat(),
+            "power_w":    power_w,
+            "expected_w": round(expected_w, 1),
         })
+
     return {"data": chart_data, "range": range}
 
 @router.get("/health-scorecard")

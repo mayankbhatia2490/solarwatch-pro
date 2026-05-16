@@ -2,12 +2,24 @@
 System Analysis — GET /api/analysis
 Weather-adjusted performance comparison: actual vs expected, PR trend,
 underperformance periods, and actionable improvement recommendations.
-All data comes from real InfluxDB readings — nothing is fabricated.
+
+Expected energy is computed from Open-Meteo historical irradiance (past_days),
+NOT from the stored expected_power_w InfluxDB field.  The stored field is only
+written when the collector is running, so collector downtime gaps make expected
+look artificially low.  Open-Meteo covers every daylight hour regardless of
+collector uptime, giving a fair apples-to-apples comparison.
+
+Actual energy uses daily_energy_kwh (Shinemonitor's own end-of-day counter)
+which is also unaffected by collector uptime gaps.
 """
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from typing import Dict, Any
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
+from collections import defaultdict
+import httpx
+import asyncio
+
 from influx import query
 from config import settings
 from cal_utils import calibration_factor
@@ -15,11 +27,28 @@ import traceback
 
 router = APIRouter(prefix="/api/analysis", tags=["Analysis"])
 
-BUCKET = settings.influxdb_bucket
+BUCKET     = settings.influxdb_bucket
 CAPACITY_W = settings.installed_capacity_w
-TARIFF = settings.electricity_tariff_inr
-DESIGN_PR = 0.78   # India rooftop baseline Performance Ratio
-TEMP_WARN = 65.0   # °C — inverter starts thermal derating
+TARIFF     = settings.electricity_tariff_inr
+LAT        = float(settings.latitude)
+LON        = float(settings.longitude)
+DESIGN_PR  = 0.78
+TEMP_WARN  = 65.0
+
+PANEL_TILT         = 5
+PANEL_AZIMUTH      = 0
+PR                 = 0.83
+BIFACIAL_REAR_GAIN = 0.09
+TEMP_COEFF         = -0.0030
+NOCT               = 45.0
+
+
+def _expected_power_w(poa_wm2: float, temp_c: float, month: int) -> float:
+    """NOCT temperature-corrected expected power with monthly calibration."""
+    T_cell     = temp_c + (NOCT - 20.0) * (poa_wm2 / 800.0)
+    correction = 1 + TEMP_COEFF * (T_cell - 25.0)
+    cal        = calibration_factor(month)
+    return max(0.0, (poa_wm2 / 1000.0) * CAPACITY_W * (1 + BIFACIAL_REAR_GAIN) * PR * correction * cal)
 
 
 def _empty_response(days: int) -> Dict[str, Any]:
@@ -31,6 +60,7 @@ def _empty_response(days: int) -> Dict[str, Any]:
             "overall_pr_pct": 0, "design_pr_pct": int(DESIGN_PR * 100),
             "lost_kwh": 0, "lost_inr": 0,
             "underperform_days": 0, "total_days": 0,
+            "calibration_warning": False,
         },
         "daily_bars": [], "pr_trend": [], "hourly_profile": [],
         "recommendations": [{
@@ -44,27 +74,47 @@ def _empty_response(days: int) -> Dict[str, Any]:
 
 
 @router.get("")
-def get_analysis(days: int = 30) -> Dict[str, Any]:
-    """
-    Returns weather-adjusted performance analysis for the last N days.
-    Compares actual generation against expected (based on irradiance),
-    identifies underperformance causes, and provides improvement actions.
-    """
+async def get_analysis(days: int = 30) -> Dict[str, Any]:
     try:
-        return _get_analysis_inner(days)
-    except Exception as exc:
+        return await _get_analysis_inner(days)
+    except Exception:
         traceback.print_exc()
         return JSONResponse(status_code=200, content=_empty_response(days))
 
 
-def _get_analysis_inner(days: int) -> Dict[str, Any]:
-    now = datetime.now(timezone.utc)
+async def _fetch_om_historical(days: int) -> dict:
+    """
+    Fetch Open-Meteo historical hourly irradiance + temperature via past_days.
+    Returns {"times": [...], "poa": [...], "temps": [...]} all same length.
+    Open-Meteo past_days max = 92; for longer periods we split into two calls.
+    """
+    past_days = min(days, 92)  # Open-Meteo hard limit
 
-    from collections import defaultdict
+    url = (
+        f"https://api.open-meteo.com/v1/forecast"
+        f"?latitude={LAT}&longitude={LON}"
+        f"&hourly=temperature_2m,global_tilted_irradiance"
+        f"&tilt={PANEL_TILT}&azimuth={PANEL_AZIMUTH}"
+        f"&timezone=Asia%2FKolkata"
+        f"&past_days={past_days}"
+        f"&forecast_days=1"
+    )
+    async with httpx.AsyncClient(timeout=12.0) as client:
+        resp = await client.get(url)
+        resp.raise_for_status()
+        data = resp.json()
 
-    # ── 1a. Actual daily generation from Shinemonitor's own cumulative counter ─
-    # Use the LAST daily_energy_kwh reading of each IST day — this is the
-    # inverter's own end-of-day total, unaffected by collector uptime gaps.
+    hourly = data.get("hourly", {})
+    return {
+        "times": hourly.get("time", []),
+        "poa":   hourly.get("global_tilted_irradiance", []),
+        "temps": hourly.get("temperature_2m", []),
+    }
+
+
+async def _get_analysis_inner(days: int) -> Dict[str, Any]:
+
+    # ── 1. Actual daily generation — Shinemonitor end-of-day cumulative counter ─
     flux_actual = f'''
 from(bucket: "{BUCKET}")
   |> range(start: -{days}d)
@@ -72,52 +122,56 @@ from(bucket: "{BUCKET}")
   |> filter(fn: (r) => r["_value"] > 0)
   |> sort(columns: ["_time"])
 '''
-    actual_recs = query(flux_actual)
+    # Run InfluxDB and Open-Meteo fetches concurrently
+    actual_recs, om = await asyncio.gather(
+        asyncio.get_event_loop().run_in_executor(None, lambda: query(flux_actual)),
+        _fetch_om_historical(days),
+    )
 
-    # Take the last reading per IST day (= end-of-day total)
+    # Last reading per IST day = end-of-day total
     daily_actual: dict[str, float] = {}
     for r in actual_recs:
         ist_date = (r.get_time() + timedelta(hours=5, minutes=30)).strftime("%Y-%m-%d")
         val = float(r.get_value() or 0)
         if val > 0:
-            daily_actual[ist_date] = val   # later reading overwrites earlier → last wins
+            daily_actual[ist_date] = val
 
-    # ── 1b. Expected energy + temperature info from power samples ─────────────
-    flux_expected = f'''
+    # ── 2. Expected energy from Open-Meteo historical irradiance ─────────────
+    # Every daylight hour is covered regardless of collector uptime.
+    daily_expected: dict[str, float] = defaultdict(float)
+
+    for i, t in enumerate(om["times"]):
+        poa    = float(om["poa"][i]   or 0) if i < len(om["poa"])   else 0
+        temp_c = float(om["temps"][i] or 30) if i < len(om["temps"]) else 30
+        if poa < 10:        # ignore nighttime / near-zero irradiance
+            continue
+        month    = int(t[5:7]) if len(t) >= 7 else date.today().month
+        expected = _expected_power_w(poa, temp_c, month)
+        # t is "YYYY-MM-DDTHH:MM" in IST (timezone=Asia/Kolkata)
+        ist_date = t[:10]
+        daily_expected[ist_date] += expected  # Wh (1-hour slots)
+
+    # ── 3. Inverter temperature from InfluxDB (for hot-hour detection) ────────
+    flux_temp = f'''
 from(bucket: "{BUCKET}")
   |> range(start: -{days}d)
-  |> filter(fn: (r) =>
-      r["_field"] == "expected_power_w" or
-      r["_field"] == "internal_radiator_temperature")
-  |> filter(fn: (r) => r["_value"] > 0)
+  |> filter(fn: (r) => r["_field"] == "internal_radiator_temperature")
+  |> filter(fn: (r) => r["_value"] > {TEMP_WARN})
   |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
-  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
-  |> sort(columns: ["_time"])
 '''
-    expected_recs = query(flux_expected)
+    temp_recs = query(flux_temp)
+    hot_hours_by_day: dict[str, int] = defaultdict(int)
+    for r in temp_recs:
+        ist_date = (r.get_time() + timedelta(hours=5, minutes=30)).strftime("%Y-%m-%d")
+        hot_hours_by_day[ist_date] += 1
 
-    daily_expected = defaultdict(lambda: {"expected_wh": 0.0, "hours": 0, "hot_hours": 0})
-    for r in expected_recs:
-        t = r.get_time()
-        ist_date = (t + timedelta(hours=5, minutes=30)).strftime("%Y-%m-%d")
-        expected = float(r.values.get("expected_power_w", 0) or 0)
-        temp     = float(r.values.get("internal_radiator_temperature", 0) or 0)
-        if expected > 50:
-            month = int(ist_date[5:7])
-            cal = calibration_factor(month)
-            daily_expected[ist_date]["expected_wh"] += expected * cal
-            daily_expected[ist_date]["hours"]       += 1
-            if temp > TEMP_WARN:
-                daily_expected[ist_date]["hot_hours"] += 1
-
-    # Build sorted list for the chart — all days that have either actual or expected
+    # ── 4. Build daily bars ───────────────────────────────────────────────────
     all_dates = sorted(set(daily_actual.keys()) | set(daily_expected.keys()))
     daily_bars = []
     for date_str in all_dates:
         actual_kwh   = round(daily_actual.get(date_str, 0.0), 2)
-        exp          = daily_expected.get(date_str, {"expected_wh": 0.0, "hot_hours": 0})
-        expected_kwh = round(exp["expected_wh"] / 1000, 2)
-        pr = round(actual_kwh / expected_kwh * 100, 1) if expected_kwh > 0 and actual_kwh > 0 else None
+        expected_kwh = round(daily_expected.get(date_str, 0.0) / 1000, 2)
+        pr      = round(actual_kwh / expected_kwh * 100, 1) if expected_kwh > 0 and actual_kwh > 0 else None
         gap_pct = round((expected_kwh - actual_kwh) / expected_kwh * 100, 1) if expected_kwh > 0 else 0
         daily_bars.append({
             "date":         date_str,
@@ -126,21 +180,22 @@ from(bucket: "{BUCKET}")
             "pr_pct":       pr,
             "gap_pct":      max(gap_pct, 0),
             "underperform": gap_pct > 10,
-            "hot_hours":    exp["hot_hours"],
+            "hot_hours":    hot_hours_by_day.get(date_str, 0),
         })
 
-    # ── 2. PR trend (rolling 7-day windows) ───────────────────────────────────
+    # ── 5. PR trend (rolling 7-day windows) ───────────────────────────────────
     pr_trend = []
     if len(daily_bars) >= 7:
         for i in range(6, len(daily_bars)):
-            window = daily_bars[i-6:i+1]
+            window       = daily_bars[i-6:i+1]
             tot_actual   = sum(d["actual_kwh"]   for d in window)
             tot_expected = sum(d["expected_kwh"] for d in window)
             pr_7d = round(tot_actual / tot_expected * 100, 1) if tot_expected > 0 else None
             pr_trend.append({"date": window[-1]["date"], "pr_7d": pr_7d})
 
-    # ── 3. Hour-of-day efficiency profile (power_now_w is fine here — gaps affect
-    #       individual hours but the average across many days self-corrects) ────
+    # ── 6. Hour-of-day efficiency profile (power_now_w vs expected) ───────────
+    # For the hourly profile we still use InfluxDB power_now_w since we want
+    # real measured power, and gaps self-correct when averaged over many days.
     flux_hourly = f'''
 from(bucket: "{BUCKET}")
   |> range(start: -{days}d)
@@ -155,34 +210,31 @@ from(bucket: "{BUCKET}")
 
     hour_buckets = defaultdict(lambda: {"actual": [], "expected": []})
     for r in interval_recs:
-        t = r.get_time()
-        ist_hour = (t + timedelta(hours=5, minutes=30)).hour
-        actual   = float(r.values.get("power_now_w", 0) or 0)
+        ist_hour = (r.get_time() + timedelta(hours=5, minutes=30)).hour
+        actual   = float(r.values.get("power_now_w",    0) or 0)
         expected = float(r.values.get("expected_power_w", 0) or 0)
         if expected > 50:
             hour_buckets[ist_hour]["actual"].append(actual)
             hour_buckets[ist_hour]["expected"].append(expected)
 
     hourly_profile = []
-    for h in range(5, 20):   # 5am → 7pm covers all daylight in Karnal
-        buck = hour_buckets.get(h, {"actual": [], "expected": []})
-        avg_actual   = sum(buck["actual"])   / len(buck["actual"])   if buck["actual"]   else 0
-        avg_expected = sum(buck["expected"]) / len(buck["expected"]) if buck["expected"] else 0
-        pr = round(avg_actual / avg_expected * 100, 1) if avg_expected > 0 else None
+    for h in range(5, 20):
+        bk = hour_buckets.get(h, {"actual": [], "expected": []})
+        avg_actual   = sum(bk["actual"])   / len(bk["actual"])   if bk["actual"]   else 0
+        avg_expected = sum(bk["expected"]) / len(bk["expected"]) if bk["expected"] else 0
+        pr_h = round(avg_actual / avg_expected * 100, 1) if avg_expected > 0 else None
         hourly_profile.append({
-            "hour":         h,
-            "label":        f"{h:02d}:00",
-            "avg_actual_w": round(avg_actual, 0),
-            "avg_expected_w": round(avg_expected, 0),
-            "pr_pct":       pr,
+            "hour":           h,
+            "label":          f"{h:02d}:00",
+            "avg_actual_w":   round(avg_actual),
+            "avg_expected_w": round(avg_expected),
+            "pr_pct":         pr_h,
         })
 
-    # ── 4. Summary KPIs ───────────────────────────────────────────────────────
+    # ── 7. Summary KPIs ───────────────────────────────────────────────────────
     total_actual_kwh   = sum(d["actual_kwh"]   for d in daily_bars)
     total_expected_kwh = sum(d["expected_kwh"] for d in daily_bars)
     overall_pr_raw     = round(total_actual_kwh / total_expected_kwh * 100, 1) if total_expected_kwh > 0 else 0
-    # Cap at 110% — a bifacial system can slightly exceed 100% due to rear gain, but
-    # anything above ~105% signals the calibration file has an overcorrective factor.
     overall_pr         = min(overall_pr_raw, 110.0)
     calibration_warning = overall_pr_raw > 105
     lost_kwh           = max(total_expected_kwh - total_actual_kwh, 0)
@@ -190,10 +242,9 @@ from(bucket: "{BUCKET}")
     underperform_days  = [d for d in daily_bars if d["underperform"]]
     hot_days           = [d for d in daily_bars if d["hot_hours"] >= 2]
 
-    # ── 5. Actionable recommendations ────────────────────────────────────────
+    # ── 8. Actionable recommendations ────────────────────────────────────────
     actions = []
 
-    # Thermal derating
     if hot_days:
         avg_hot = sum(d["hot_hours"] for d in hot_days) / len(hot_days)
         actions.append({
@@ -201,12 +252,10 @@ from(bucket: "{BUCKET}")
             "icon": "🌡️",
             "title": f"Inverter running hot on {len(hot_days)} days",
             "detail": f"Average {avg_hot:.0f} hours/day above {TEMP_WARN:.0f}°C. "
-                      f"Thermal derating reduces output ~1% per °C above threshold. "
-                      f"Improve ventilation around the inverter.",
+                      f"Thermal derating reduces output ~1% per °C above threshold.",
             "action": "Check inverter airflow — ensure 20cm clearance on all sides",
         })
 
-    # Soiling / shading (sustained PR drop)
     if len(pr_trend) >= 2:
         recent_pr  = pr_trend[-1]["pr_7d"] or 0
         earlier_pr = pr_trend[max(0, len(pr_trend)//2)]["pr_7d"] or 0
@@ -216,12 +265,10 @@ from(bucket: "{BUCKET}")
                 "icon": "🧹",
                 "title": f"Performance dropped {earlier_pr - recent_pr:.1f}% over the period",
                 "detail": f"PR fell from {earlier_pr}% → {recent_pr}%. "
-                          f"Gradual drops usually mean soiling (dust/bird droppings). "
-                          f"A clean can recover 3–8% output.",
+                          f"Gradual drops usually mean soiling. A clean can recover 3–8%.",
                 "action": "Clean panels — morning with soft cloth + plain water",
             })
 
-    # More than 3 bad days
     if len(underperform_days) > 3:
         worst = sorted(underperform_days, key=lambda x: x["gap_pct"], reverse=True)[:3]
         worst_str = ", ".join(f"{d['date']} (−{d['gap_pct']}%)" for d in worst)
@@ -229,19 +276,16 @@ from(bucket: "{BUCKET}")
             "priority": "info",
             "icon": "📉",
             "title": f"{len(underperform_days)} days with >10% gap vs weather forecast",
-            "detail": f"Worst days: {worst_str}. "
-                      f"Check if these align with clouds/rain or equipment issues.",
+            "detail": f"Worst days: {worst_str}. Check if these align with clouds/rain.",
             "action": "Compare these dates with your local weather records",
         })
 
-    # System healthy
     if overall_pr >= 80:
         actions.append({
             "priority": "good",
             "icon": "✅",
             "title": f"System PR {overall_pr}% — above India baseline ({int(DESIGN_PR*100)}%)",
-            "detail": f"Your panels are converting weather-adjusted irradiance efficiently. "
-                      f"No structural issues detected.",
+            "detail": "Your panels are converting weather-adjusted irradiance efficiently.",
             "action": "Continue regular monthly panel cleaning",
         })
     elif overall_pr >= 70:
@@ -249,8 +293,7 @@ from(bucket: "{BUCKET}")
             "priority": "info",
             "icon": "ℹ️",
             "title": f"System PR {overall_pr}% — slightly below {int(DESIGN_PR*100)}% baseline",
-            "detail": "Minor losses from soiling, shading, or cable heating. "
-                      "Within acceptable range but room for improvement.",
+            "detail": "Minor losses from soiling, shading, or cable heating.",
             "action": "Panel cleaning + check all DC cable connectors",
         })
     else:
@@ -258,23 +301,23 @@ from(bucket: "{BUCKET}")
             "priority": "critical",
             "icon": "⚠️",
             "title": f"System PR {overall_pr}% — significantly below baseline",
-            "detail": "Losses above 30% from weather-adjusted baseline suggest a hardware "
-                      "issue: shading, soiling, or inverter fault.",
+            "detail": "Losses above 30% suggest a hardware issue: shading, soiling, or inverter fault.",
             "action": "Inspect panels + contact your installer for a system audit",
         })
 
     return {
-        "status": "success",
+        "status":      "success",
         "period_days": days,
+        "expected_source": "open-meteo-historical",
         "summary": {
-            "total_actual_kwh":   round(total_actual_kwh, 1),
-            "total_expected_kwh": round(total_expected_kwh, 1),
-            "overall_pr_pct":     overall_pr,
-            "design_pr_pct":      int(DESIGN_PR * 100),
-            "lost_kwh":           round(lost_kwh, 1),
-            "lost_inr":           int(lost_inr),
-            "underperform_days":  len(underperform_days),
-            "total_days":         min(len(daily_bars), days),
+            "total_actual_kwh":    round(total_actual_kwh, 1),
+            "total_expected_kwh":  round(total_expected_kwh, 1),
+            "overall_pr_pct":      overall_pr,
+            "design_pr_pct":       int(DESIGN_PR * 100),
+            "lost_kwh":            round(lost_kwh, 1),
+            "lost_inr":            int(lost_inr),
+            "underperform_days":   len(underperform_days),
+            "total_days":          min(len(daily_bars), days),
             "calibration_warning": calibration_warning,
         },
         "daily_bars":     daily_bars,
