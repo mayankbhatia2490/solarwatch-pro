@@ -293,28 +293,22 @@ async def daily_chart(
     stop_clause = f"|> range(start: {start}, stop: {stop})" if stop != "now()" else f"|> range(start: {start})"
 
     # ── Fetch actual power from InfluxDB ──────────────────────────────────────
-    flux = f'''
-from(bucket: "{BUCKET}")
-  {stop_clause}
-  |> filter(fn: (r) => r["_field"] == "power_now_w")
-  |> aggregateWindow(every: {window}, fn: mean, createEmpty: false)
-'''
+
     if multi_day:
-        # Also fetch expected from InfluxDB as fallback only for intra-day ranges
-        flux_both = f'''
+        # Single-field query — no pivot needed; value comes from r.get_value()
+        flux_actual = f'''
 from(bucket: "{BUCKET}")
   {stop_clause}
   |> filter(fn: (r) => r["_field"] == "power_now_w")
   |> aggregateWindow(every: {window}, fn: mean, createEmpty: false)
 '''
-        # Kick off InfluxDB + Open-Meteo concurrently
         loop = asyncio.get_event_loop()
         recs, om_map = await asyncio.gather(
-            loop.run_in_executor(None, lambda: query(flux_both)),
+            loop.run_in_executor(None, lambda: query(flux_actual)),
             _om_expected_map(past_days),
         )
     else:
-        # Short range: read both fields from InfluxDB (collector always running)
+        # Short range: both fields pivoted — values come from vals.get(field_name)
         flux_short = f'''
 from(bucket: "{BUCKET}")
   {stop_clause}
@@ -331,15 +325,19 @@ from(bucket: "{BUCKET}")
     chart_data = []
 
     for r in recs:
-        ts  = r.get_time()
+        ts   = r.get_time()
         vals = r.values
 
-        power_w = round(float(vals.get("power_now_w") or 0), 1)
+        # Multi-day: single field query → value in r.get_value()
+        # Short range: pivoted query → value in vals["power_now_w"]
+        if multi_day:
+            power_w = round(float(r.get_value() or 0), 1)
+        else:
+            power_w = round(float(vals.get("power_now_w") or 0), 1)
 
         if multi_day and om_map:
-            # Match this timestamp to the nearest Open-Meteo IST hour
-            ist_dt   = ts.astimezone(_IST)
-            hour_key = ist_dt.strftime("%Y-%m-%dT%H:00")
+            ist_dt     = ts.astimezone(_IST)
+            hour_key   = ist_dt.strftime("%Y-%m-%dT%H:00")
             expected_w = om_map.get(hour_key, 0.0)
         else:
             expected_w = round(float(vals.get("expected_power_w") or 0), 1)
