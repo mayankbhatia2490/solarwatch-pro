@@ -2,6 +2,16 @@
 
 ## High Priority
 
+### Simplify Calibration: Derive Real PR from Actual Weather History
+- Current approach compares 3 irradiance sources (PVGIS, Open-Meteo, VEDAS) — unnecessarily complex
+- Simpler and more accurate: fetch Open-Meteo archive (real historical weather) for each past month,
+  compute theoretical kWh, compare to actual InfluxDB kWh → derive real monthly Performance Ratio
+- `actual_pr[month] = Σ actual_kwh / Σ (archive_irradiance × capacity × bifacial × tilt_factor)`
+- Drop the 3-source MAPE comparison entirely; use derived PR directly in weather.py forecasts
+- Self-contained: only needs your own InfluxDB data + Open-Meteo archive (no external databases)
+- Note: app's motive is MONITORING not prediction — calibration only matters for the
+  "Expected vs Actual" card accuracy; simpler PR derivation is sufficient for that use case
+
 ### Clear-Sky Performance Baseline
 - Replace Open-Meteo expected power with a clear-sky model (purely astronomical, no weather API)
 - Clear-sky max = theoretical irradiance given sun position × panel geometry × system constants
