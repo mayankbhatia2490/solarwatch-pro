@@ -1,12 +1,13 @@
 """
 UHBVN Electricity Bill Upload & Parse — POST /api/bills/upload
-Accepts a PDF bill, extracts text with pdfplumber, sends to Gemini for
-structured extraction, stores confirmed data in InfluxDB.
+Sends the PDF directly to Gemini as inline_data (native multimodal PDF understanding).
+No pdfplumber text extraction — Gemini reads the complex UHBVN table layout natively.
 """
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
 from typing import Dict, Any
 from datetime import datetime, timezone
+import base64
 import io
 import json
 import httpx
@@ -19,111 +20,132 @@ router = APIRouter(prefix="/api/bills", tags=["Bills"])
 BUCKET = settings.influxdb_bucket
 
 EXTRACT_PROMPT = """
-You are parsing an Indian electricity bill from UHBVN (Uttar Haryana Bijli Vitran Nigam).
-Extract the following fields from the bill text below.
-Return ONLY a valid JSON object with these exact keys (use null if not found):
+You are reading a UHBVN (Uttar Haryana Bijli Vitran Nigam) electricity bill.
+This is a net metering bill with THREE separate meters on it:
+  - KWHE = Export units (solar sent to grid)
+  - KWHI = Import units (electricity taken from grid)
+  - KWHS = Solar generated units (total solar production from your panels)
+
+Extract these fields and return ONLY a valid JSON object with these exact keys.
+Use null if a field is genuinely not present. Do NOT guess — use null for missing values.
 
 {
-  "consumer_number": "string — consumer/account number",
-  "meter_number": "string — meter serial number",
-  "billing_period_from": "YYYY-MM-DD — start of billing period",
-  "billing_period_to": "YYYY-MM-DD — end of billing period",
-  "previous_reading_kwh": number — previous meter reading in kWh,
-  "current_reading_kwh": number — current meter reading in kWh,
-  "units_consumed_kwh": number — total units consumed (import from grid),
-  "units_exported_kwh": number — net metering export units (solar export), null if not on net metering,
-  "net_units_billed_kwh": number — net units billed after netting export,
-  "amount_before_tax_inr": number — amount before taxes/surcharges,
-  "total_amount_inr": number — total payable amount in rupees,
-  "due_date": "YYYY-MM-DD",
-  "tariff_category": "string — e.g. DS, NDS, industrial etc"
+  "consumer_number": "account number shown near top of bill",
+  "meter_number": "the solar meter number (the one labelled KWHS)",
+  "billing_period_from": "YYYY-MM-DD format of billing period start date",
+  "billing_period_to": "YYYY-MM-DD format of billing period end date",
+  "solar_generated_kwh": number — Solar Generated Units (KWHS consumed column),
+  "units_imported_kwh": number — Import units from grid (KWHI consumed column),
+  "units_exported_kwh": number — Export units to grid (KWHE consumed column),
+  "net_units_billed_kwh": number — Net Billed Units (after netting solar against import),
+  "total_amount_inr": number — Net Payable Amount (can be negative if in credit),
+  "due_date": "YYYY-MM-DD format",
+  "tariff_category": "DS or NDS or other category shown on bill",
+  "sanctioned_load_kw": number — Sanctioned Load in kW,
+  "carry_forward_kwh": number — Carried Forward KWH to next bill (credit units)
 }
-
-Bill text:
 """
 
 
-async def _call_gemini(prompt: str, text: str) -> dict:
-    """Call Gemini API to parse bill text into structured JSON."""
+async def _call_gemini_with_pdf(pdf_bytes: bytes) -> dict:
+    """Send PDF directly to Gemini as inline base64 — far more accurate than text extraction."""
     api_key = settings.gemini_api_key
     if not api_key:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
 
-    full_prompt = prompt + text[:8000]  # cap at 8k chars
+    b64 = base64.b64encode(pdf_bytes).decode()
 
-    # Try Gemini 2.5 Flash first, fall back to 1.5 Flash
-    for model in ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-flash-latest"]:
+    # Try configured model first, then fallbacks
+    models = [settings.gemini_model, "gemini-2.0-flash", "gemini-1.5-flash"]
+    # Deduplicate while preserving order
+    seen = set()
+    models = [m for m in models if m and not (m in seen or seen.add(m))]
+
+    last_error = "Gemini API unavailable"
+    for model in models:
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
             f"{model}:generateContent?key={api_key}"
         )
         payload = {
-            "contents": [{"parts": [{"text": full_prompt}]}],
-            "generationConfig": {"temperature": 0.1, "maxOutputTokens": 1024},
+            "contents": [{
+                "parts": [
+                    {
+                        "inline_data": {
+                            "mime_type": "application/pdf",
+                            "data": b64,
+                        }
+                    },
+                    {"text": EXTRACT_PROMPT},
+                ]
+            }],
+            "generationConfig": {
+                "temperature": 0.1,
+                "maxOutputTokens": 1024,
+            },
         }
         try:
-            async with httpx.AsyncClient(timeout=20.0) as client:
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.post(url, json=payload)
                 if resp.status_code == 404:
+                    last_error = f"Model {model} not found"
+                    continue
+                if resp.status_code == 400:
+                    # Model may not support inline PDF — try next
+                    last_error = f"Model {model} rejected request: {resp.text[:200]}"
                     continue
                 resp.raise_for_status()
                 data = resp.json()
-                raw = data["candidates"][0]["content"]["parts"][0]["text"]
-                # Strip markdown code fences if present
-                raw = raw.strip()
+                raw = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                # Strip markdown fences
                 if raw.startswith("```"):
-                    raw = raw.split("```")[1]
+                    parts = raw.split("```")
+                    raw = parts[1] if len(parts) > 1 else raw
                     if raw.startswith("json"):
                         raw = raw[4:]
                 return json.loads(raw.strip())
-        except (json.JSONDecodeError, KeyError, IndexError):
-            raise HTTPException(status_code=422, detail="AI could not parse bill — try a clearer PDF scan")
-        except httpx.HTTPStatusError:
+        except json.JSONDecodeError as e:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Gemini returned non-JSON response — try uploading again. ({e})"
+            )
+        except (KeyError, IndexError):
+            raise HTTPException(status_code=422, detail="Gemini response was empty or malformed")
+        except httpx.HTTPStatusError as e:
+            last_error = f"HTTP {e.response.status_code}: {e.response.text[:200]}"
+            continue
+        except Exception as e:
+            last_error = str(e)
             continue
 
-    raise HTTPException(status_code=503, detail="Gemini API unavailable")
-
-
-def _extract_pdf_text(pdf_bytes: bytes) -> str:
-    """Extract all text from PDF using pdfplumber."""
-    try:
-        import pdfplumber
-    except ImportError:
-        raise HTTPException(status_code=503, detail="pdfplumber not installed — rebuild container")
-
-    text_parts = []
-    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-        for page in pdf.pages:
-            t = page.extract_text()
-            if t:
-                text_parts.append(t)
-    return "\n".join(text_parts)
+    raise HTTPException(status_code=503, detail=f"Gemini unavailable: {last_error}")
 
 
 @router.post("/upload")
 async def upload_bill(file: UploadFile = File(...)) -> Dict[str, Any]:
     """
-    Upload a UHBVN PDF bill. Returns AI-parsed fields for user confirmation.
-    Does NOT store anything yet — call /api/bills/confirm to save.
+    Upload a UHBVN PDF bill. PDF is sent directly to Gemini for native parsing.
+    Returns AI-parsed fields for user review — call /confirm to save.
     """
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files accepted")
 
     pdf_bytes = await file.read()
-    if len(pdf_bytes) > 10 * 1024 * 1024:  # 10 MB cap
+    if len(pdf_bytes) > 10 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
+    if len(pdf_bytes) < 1000:
+        raise HTTPException(status_code=400, detail="File appears to be empty or corrupt")
 
-    text = _extract_pdf_text(pdf_bytes)
-    if len(text.strip()) < 50:
-        raise HTTPException(status_code=422, detail="Could not extract text — is this a scanned image PDF?")
+    parsed = await _call_gemini_with_pdf(pdf_bytes)
 
-    parsed = await _call_gemini(EXTRACT_PROMPT, text)
+    # Back-fill units_consumed_kwh for backwards compat (= import from grid)
+    if "units_imported_kwh" in parsed and parsed.get("units_imported_kwh") is not None:
+        parsed.setdefault("units_consumed_kwh", parsed["units_imported_kwh"])
 
     return {
-        "status":    "parsed",
-        "filename":  file.filename,
-        "raw_chars": len(text),
-        "parsed":    parsed,
+        "status":   "parsed",
+        "filename": file.filename,
+        "parsed":   parsed,
     }
 
 
@@ -131,35 +153,36 @@ async def upload_bill(file: UploadFile = File(...)) -> Dict[str, Any]:
 async def confirm_bill(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     Save confirmed bill data to InfluxDB after user reviews AI-parsed fields.
-    Payload: the 'parsed' dict from /upload, optionally edited by the user.
     """
     p = payload.get("parsed", payload)
 
-    # Parse billing period end as the timestamp for this data point
     period_to = p.get("billing_period_to")
-    if period_to:
-        try:
-            ts = datetime.strptime(period_to, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        except ValueError:
-            ts = datetime.now(timezone.utc)
-    else:
+    try:
+        ts = datetime.strptime(period_to, "%Y-%m-%d").replace(tzinfo=timezone.utc) if period_to else datetime.now(timezone.utc)
+    except ValueError:
         ts = datetime.now(timezone.utc)
 
-    fields: Dict[str, Any] = {}
-    for key in [
-        "units_consumed_kwh", "units_exported_kwh", "net_units_billed_kwh",
+    num_fields = [
+        "solar_generated_kwh", "units_imported_kwh", "units_exported_kwh",
+        "units_consumed_kwh", "net_units_billed_kwh",
+        "total_amount_inr", "amount_before_tax_inr",
         "previous_reading_kwh", "current_reading_kwh",
-        "amount_before_tax_inr", "total_amount_inr",
-    ]:
+        "sanctioned_load_kw", "carry_forward_kwh",
+    ]
+    str_fields = [
+        "consumer_number", "meter_number", "billing_period_from",
+        "billing_period_to", "tariff_category", "due_date",
+    ]
+
+    fields: Dict[str, Any] = {}
+    for key in num_fields:
         v = p.get(key)
         if v is not None:
             try:
                 fields[key] = float(v)
             except (TypeError, ValueError):
                 pass
-
-    for key in ["consumer_number", "meter_number", "billing_period_from",
-                "billing_period_to", "tariff_category", "due_date"]:
+    for key in str_fields:
         v = p.get(key)
         if v:
             fields[key] = str(v)
@@ -167,27 +190,19 @@ async def confirm_bill(payload: Dict[str, Any]) -> Dict[str, Any]:
     if not fields:
         raise HTTPException(status_code=400, detail="No valid fields to store")
 
-    # Derive self-consumed if we have both generation (from InfluxDB) and export
-    exported = fields.get("units_exported_kwh")
-    consumed = fields.get("units_consumed_kwh")
-
     write_api = get_client()
     from influxdb_client import Point
     from influxdb_client.client.write_api import SYNCHRONOUS
 
     point = Point("electricity_bill").time(ts)
-    tags = {
+    for k, v in {
         "source":   "uhbvn",
         "meter":    p.get("meter_number", "unknown"),
         "consumer": p.get("consumer_number", "unknown"),
-    }
-    for k, v in tags.items():
+    }.items():
         point = point.tag(k, str(v))
     for k, v in fields.items():
-        if isinstance(v, float):
-            point = point.field(k, v)
-        else:
-            point = point.field(k, v)
+        point = point.field(k, v)
 
     try:
         wa = write_api.write_api(write_options=SYNCHRONOUS)
@@ -196,40 +211,39 @@ async def confirm_bill(payload: Dict[str, Any]) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"InfluxDB write failed: {e}")
 
     return {
-        "status":  "saved",
-        "period":  period_to,
-        "fields_saved": len(fields),
-        "exported_kwh": exported,
-        "consumed_kwh": consumed,
+        "status":            "saved",
+        "period":            period_to,
+        "fields_saved":      len(fields),
+        "solar_kwh":         fields.get("solar_generated_kwh"),
+        "imported_kwh":      fields.get("units_imported_kwh"),
+        "exported_kwh":      fields.get("units_exported_kwh"),
+        "net_billed_kwh":    fields.get("net_units_billed_kwh"),
+        "total_amount_inr":  fields.get("total_amount_inr"),
     }
 
 
 @router.get("/history")
 async def bill_history() -> Dict[str, Any]:
-    """Return all stored bill records."""
+    """Return all stored bill records, newest first."""
+    from influx import query
     flux = f'''
 from(bucket: "{BUCKET}")
   |> range(start: -5y)
   |> filter(fn: (r) => r["_measurement"] == "electricity_bill")
-  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
   |> sort(columns: ["_time"], desc: true)
 '''
-    recs = []
+    recs: dict[str, dict] = {}
     try:
-        from influx import query
         rows = query(flux)
         for r in rows:
-            row_dict = {"time": str(r.get_time())}
-            for field in [
-                "billing_period_from", "billing_period_to", "units_consumed_kwh",
-                "units_exported_kwh", "net_units_billed_kwh", "total_amount_inr",
-                "consumer_number", "meter_number",
-            ]:
-                v = r.values.get(field)
-                if v is not None:
-                    row_dict[field] = v
-            recs.append(row_dict)
+            ts = str(r.get_time())
+            if ts not in recs:
+                recs[ts] = {"time": ts}
+            field = r.values.get("_field")
+            val   = r.get_value()
+            if field and val is not None:
+                recs[ts][field] = val
     except Exception:
         pass
 
-    return {"status": "success", "bills": recs}
+    return {"status": "success", "bills": list(recs.values())}

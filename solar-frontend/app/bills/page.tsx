@@ -10,15 +10,15 @@ interface ParsedBill {
   meter_number:          string | null;
   billing_period_from:   string | null;
   billing_period_to:     string | null;
-  previous_reading_kwh:  number | null;
-  current_reading_kwh:   number | null;
-  units_consumed_kwh:    number | null;
+  solar_generated_kwh:   number | null;
+  units_imported_kwh:    number | null;
   units_exported_kwh:    number | null;
   net_units_billed_kwh:  number | null;
-  amount_before_tax_inr: number | null;
   total_amount_inr:      number | null;
   due_date:              string | null;
   tariff_category:       string | null;
+  sanctioned_load_kw:    number | null;
+  carry_forward_kwh:     number | null;
 }
 
 interface BillRecord {
@@ -199,16 +199,16 @@ export default function BillsPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Consumer Number"      value={fv("consumer_number")}       onChange={sf("consumer_number")} />
-            <Field label="Meter Number"         value={fv("meter_number")}          onChange={sf("meter_number")} />
-            <Field label="Billing From"         value={fv("billing_period_from")}   onChange={sf("billing_period_from")} type="date" />
-            <Field label="Billing To"           value={fv("billing_period_to")}     onChange={sf("billing_period_to")}   type="date" />
-            <Field label="Previous Reading (kWh)" value={fv("previous_reading_kwh")}  onChange={sf("previous_reading_kwh")} type="number" />
-            <Field label="Current Reading (kWh)"  value={fv("current_reading_kwh")}   onChange={sf("current_reading_kwh")}  type="number" />
-            <Field label="Units Consumed (kWh)"   value={fv("units_consumed_kwh")}    onChange={sf("units_consumed_kwh")}   type="number" />
-            <Field label="Units Exported / Net Metering (kWh)" value={fv("units_exported_kwh")} onChange={sf("units_exported_kwh")} type="number" />
+            <Field label="Consumer Number"        value={fv("consumer_number")}       onChange={sf("consumer_number")} />
+            <Field label="Solar Meter Number"     value={fv("meter_number")}          onChange={sf("meter_number")} />
+            <Field label="Billing From"           value={fv("billing_period_from")}   onChange={sf("billing_period_from")} type="date" />
+            <Field label="Billing To"             value={fv("billing_period_to")}     onChange={sf("billing_period_to")}   type="date" />
+            <Field label="Solar Generated — KWHS (kWh)" value={fv("solar_generated_kwh")} onChange={sf("solar_generated_kwh")} type="number" />
+            <Field label="Import from Grid — KWHI (kWh)" value={fv("units_imported_kwh")} onChange={sf("units_imported_kwh")}  type="number" />
+            <Field label="Export to Grid — KWHE (kWh)"   value={fv("units_exported_kwh")} onChange={sf("units_exported_kwh")}  type="number" />
             <Field label="Net Units Billed (kWh)" value={fv("net_units_billed_kwh")}  onChange={sf("net_units_billed_kwh")} type="number" />
-            <Field label="Total Amount (₹)"       value={fv("total_amount_inr")}      onChange={sf("total_amount_inr")}     type="number" />
+            <Field label="Net Payable Amount (₹ — negative = credit)" value={fv("total_amount_inr")} onChange={sf("total_amount_inr")} type="number" />
+            <Field label="Carry Forward Units (kWh)" value={fv("carry_forward_kwh")} onChange={sf("carry_forward_kwh")} type="number" />
             <Field label="Due Date"               value={fv("due_date")}              onChange={sf("due_date")}             type="date" />
             <Field label="Tariff Category"        value={fv("tariff_category")}       onChange={sf("tariff_category")} />
           </div>
@@ -351,7 +351,7 @@ export default function BillsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr>
-                  {["Period", "Consumed (kWh)", "Exported (kWh)", "Amount (₹)"].map(h => (
+                  {["Period", "Solar Gen (kWh)", "Import (kWh)", "Export (kWh)", "Amount (₹)"].map(h => (
                     <th key={h} className="text-left pb-3 pr-4 text-xs font-medium" style={{ color: "var(--card-label)" }}>{h}</th>
                   ))}
                 </tr>
@@ -368,9 +368,15 @@ export default function BillsPage() {
                       </div>
                     </td>
                     <td className="py-3 pr-4">
+                      <div className="flex items-center gap-1 text-amber-400">
+                        <Zap className="w-3 h-3" />
+                        {(b as any).solar_generated_kwh != null ? (b as any).solar_generated_kwh.toFixed(0) : "—"}
+                      </div>
+                    </td>
+                    <td className="py-3 pr-4">
                       <div className="flex items-center gap-1 text-blue-400">
                         <Zap className="w-3 h-3" />
-                        {b.units_consumed_kwh != null ? b.units_consumed_kwh.toFixed(0) : "—"}
+                        {(b as any).units_imported_kwh != null ? (b as any).units_imported_kwh.toFixed(0) : "—"}
                       </div>
                     </td>
                     <td className="py-3 pr-4">
@@ -380,9 +386,10 @@ export default function BillsPage() {
                       </div>
                     </td>
                     <td className="py-3">
-                      <div className="flex items-center gap-1 text-amber-400">
+                      <div className={`flex items-center gap-1 ${(b.total_amount_inr ?? 0) < 0 ? "text-emerald-400" : "text-amber-400"}`}>
                         <IndianRupee className="w-3 h-3" />
                         {b.total_amount_inr != null ? b.total_amount_inr.toFixed(0) : "—"}
+                        {(b.total_amount_inr ?? 0) < 0 && <span className="text-xs">(credit)</span>}
                       </div>
                     </td>
                   </tr>
