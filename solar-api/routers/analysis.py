@@ -10,6 +10,7 @@ from typing import Dict, Any
 from datetime import datetime, timezone, timedelta
 from influx import query
 from config import settings
+from cal_utils import calibration_factor
 import traceback
 
 router = APIRouter(prefix="/api/analysis", tags=["Analysis"])
@@ -102,7 +103,9 @@ from(bucket: "{BUCKET}")
         expected = float(r.values.get("expected_power_w", 0) or 0)
         temp     = float(r.values.get("internal_radiator_temperature", 0) or 0)
         if expected > 50:
-            daily_expected[ist_date]["expected_wh"] += expected
+            month = int(ist_date[5:7])
+            cal = calibration_factor(month)
+            daily_expected[ist_date]["expected_wh"] += expected * cal
             daily_expected[ist_date]["hours"]       += 1
             if temp > TEMP_WARN:
                 daily_expected[ist_date]["hot_hours"] += 1

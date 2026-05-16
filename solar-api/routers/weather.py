@@ -1,9 +1,10 @@
 from fastapi import APIRouter
 from typing import Dict, Any
-import httpx, json, os
+import httpx
 from datetime import datetime, timezone
 from config import settings
 from influx import query
+from cal_utils import calibration_factor
 
 router = APIRouter(prefix="/api/weather", tags=["Weather"])
 
@@ -15,18 +16,6 @@ PANEL_TILT    = 5
 PANEL_AZIMUTH = 0
 PERFORMANCE_RATIO  = 0.83
 BIFACIAL_REAR_GAIN = 0.09
-
-_CAL_FILE = os.environ.get("CAL_FILE", "/app/irradiance_cal.json")
-
-
-def _calibration_factor(month: int) -> float:
-    """Return the monthly correction factor from irradiance calibration, default 1.0."""
-    try:
-        with open(_CAL_FILE) as f:
-            cal = json.load(f)
-        return cal.get("correction_factors", {}).get(str(month), 1.0)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return 1.0
 
 
 def _get_live_power() -> float:
@@ -83,7 +72,7 @@ async def get_weather() -> Dict[str, Any]:
 
                 # Expected power: POA × capacity × bifacial gain × PR × calibration factor
                 current_month = datetime.now(timezone.utc).month
-                cal_factor    = _calibration_factor(current_month)
+                cal_factor    = calibration_factor(current_month)
                 expected_power_w = round(
                     (poa_irradiance / 1000.0) * CAPACITY_W * (1 + BIFACIAL_REAR_GAIN) * PERFORMANCE_RATIO * cal_factor
                 )
@@ -142,23 +131,24 @@ async def get_weather() -> Dict[str, Any]:
     except Exception as e:
         print(f"Weather API error: {e}")
 
-    # Fallback — real InfluxDB power, estimated weather
+    # Fallback — real InfluxDB power only; weather unavailable, do NOT fabricate expected_power
     actual_power_w = round(_get_live_power())
-    fallback_poa   = 850
     return {
-        "status": "partial",
+        "status": "weather_unavailable",
         "location": {"name": settings.location_name, "latitude": LAT, "longitude": LON},
         "data": {
+            # Rough ambient estimates only — NOT used for solar calculations
             "current": {
                 "temperature_2m": 35.0, "apparent_temperature": 38.0,
                 "relative_humidity_2m": 45, "cloud_cover": 15,
-                "wind_speed_10m": 10.0, "poa_irradiance_wm2": fallback_poa,
-                "shortwave_radiation": 830, "precipitation": 0,
+                "wind_speed_10m": 10.0, "poa_irradiance_wm2": None,
+                "shortwave_radiation": None, "precipitation": None,
             },
-            "solar_radiation_wm2": fallback_poa,
-            "expected_power_w":    round((fallback_poa / 1000.0) * CAPACITY_W * (1 + BIFACIAL_REAR_GAIN) * PERFORMANCE_RATIO),
+            "solar_radiation_wm2": None,
+            # Null out all derived solar values — synthetic irradiance must not be used
+            "expected_power_w":    None,
             "actual_power_w":      actual_power_w,
-            "efficiency_drop_pct": 0.0,
+            "efficiency_drop_pct": None,
             "performance_ratio_used": PERFORMANCE_RATIO,
             "system_capacity_w":   CAPACITY_W,
         }

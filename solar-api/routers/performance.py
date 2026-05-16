@@ -3,6 +3,7 @@ from typing import Dict, Any
 from datetime import datetime, timezone, timedelta, date
 from config import settings
 from influx import query
+from cal_utils import calibration_factor
 
 router = APIRouter(prefix="/api/performance", tags=["Performance"])
 
@@ -136,17 +137,27 @@ from(bucket: "{BUCKET}")
     for r in pr_recs:
         actual = r.values.get("power_now_w", 0) or 0
         expected = r.values.get("expected_power_w", 0) or 0
+        # Apply monthly calibration to expected_power_w (written without calibration by collector)
+        rec_time = r.get_time()
+        month = rec_time.month
+        cal = calibration_factor(month)
+        expected_cal = expected * cal
         # Only include clear-sky daytime readings where expected > 200W
         # (avoids dawn/dusk noise where tiny expected values distort the ratio)
-        if expected > 200 and actual >= 0:
-            ratio = actual / expected
+        if expected_cal > 200 and actual >= 0:
+            ratio = actual / expected_cal
             # Cap individual readings at 1.05 (5% over expected is measurement noise)
             pr_values.append(min(ratio, 1.05))
 
     # Require at least 20 samples for a meaningful average
-    performance_ratio = round(sum(pr_values) / len(pr_values) * 100, 1) if len(pr_values) >= 20 else 78.0
-    # Hard cap at 100% (physical limit)
-    performance_ratio = min(performance_ratio, 100.0)
+    # Return null when insufficient data — do NOT return hardcoded 78% baseline
+    data_sufficient = len(pr_values) >= 20
+    if data_sufficient:
+        performance_ratio = round(sum(pr_values) / len(pr_values) * 100, 1)
+        # Hard cap at 100% (physical limit)
+        performance_ratio = min(performance_ratio, 100.0)
+    else:
+        performance_ratio = None
 
     # Actual degradation: difference between baseline PR and current PR (real measurement)
     if baseline_pr is not None and baseline_pr > 0:
