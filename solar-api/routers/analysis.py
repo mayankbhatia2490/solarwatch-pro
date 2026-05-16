@@ -59,12 +59,33 @@ def get_analysis(days: int = 30) -> Dict[str, Any]:
 def _get_analysis_inner(days: int) -> Dict[str, Any]:
     now = datetime.now(timezone.utc)
 
-    # ── 1. Daily actual vs expected (for bar chart) ────────────────────────────
-    flux_daily = f'''
+    from collections import defaultdict
+
+    # ── 1a. Actual daily generation from Shinemonitor's own cumulative counter ─
+    # Use the LAST daily_energy_kwh reading of each IST day — this is the
+    # inverter's own end-of-day total, unaffected by collector uptime gaps.
+    flux_actual = f'''
+from(bucket: "{BUCKET}")
+  |> range(start: -{days}d)
+  |> filter(fn: (r) => r["_field"] == "daily_energy_kwh")
+  |> filter(fn: (r) => r["_value"] > 0)
+  |> sort(columns: ["_time"])
+'''
+    actual_recs = query(flux_actual)
+
+    # Take the last reading per IST day (= end-of-day total)
+    daily_actual: dict[str, float] = {}
+    for r in actual_recs:
+        ist_date = (r.get_time() + timedelta(hours=5, minutes=30)).strftime("%Y-%m-%d")
+        val = float(r.get_value() or 0)
+        if val > 0:
+            daily_actual[ist_date] = val   # later reading overwrites earlier → last wins
+
+    # ── 1b. Expected energy + temperature info from power samples ─────────────
+    flux_expected = f'''
 from(bucket: "{BUCKET}")
   |> range(start: -{days}d)
   |> filter(fn: (r) =>
-      r["_field"] == "power_now_w" or
       r["_field"] == "expected_power_w" or
       r["_field"] == "internal_radiator_temperature")
   |> filter(fn: (r) => r["_value"] > 0)
@@ -72,35 +93,28 @@ from(bucket: "{BUCKET}")
   |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
   |> sort(columns: ["_time"])
 '''
-    hourly_recs = query(flux_daily)
+    expected_recs = query(flux_expected)
 
-    # Aggregate into daily buckets (IST date)
-    from collections import defaultdict
-    daily = defaultdict(lambda: {"actual_wh": 0.0, "expected_wh": 0.0,
-                                  "hours": 0, "hot_hours": 0})
-
-    for r in hourly_recs:
+    daily_expected = defaultdict(lambda: {"expected_wh": 0.0, "hours": 0, "hot_hours": 0})
+    for r in expected_recs:
         t = r.get_time()
-        # Convert UTC → IST date
         ist_date = (t + timedelta(hours=5, minutes=30)).strftime("%Y-%m-%d")
-        actual   = float(r.values.get("power_now_w", 0) or 0)
         expected = float(r.values.get("expected_power_w", 0) or 0)
         temp     = float(r.values.get("internal_radiator_temperature", 0) or 0)
-
-        if expected > 50:   # only count daylight hours
-            daily[ist_date]["actual_wh"]   += actual
-            daily[ist_date]["expected_wh"] += expected
-            daily[ist_date]["hours"]       += 1
+        if expected > 50:
+            daily_expected[ist_date]["expected_wh"] += expected
+            daily_expected[ist_date]["hours"]       += 1
             if temp > TEMP_WARN:
-                daily[ist_date]["hot_hours"] += 1
+                daily_expected[ist_date]["hot_hours"] += 1
 
-    # Build sorted list for the chart
+    # Build sorted list for the chart — all days that have either actual or expected
+    all_dates = sorted(set(daily_actual.keys()) | set(daily_expected.keys()))
     daily_bars = []
-    for date_str in sorted(daily.keys()):
-        d = daily[date_str]
-        actual_kwh   = round(d["actual_wh"]   / 1000, 2)
-        expected_kwh = round(d["expected_wh"] / 1000, 2)
-        pr = round(actual_kwh / expected_kwh * 100, 1) if expected_kwh > 0 else None
+    for date_str in all_dates:
+        actual_kwh   = round(daily_actual.get(date_str, 0.0), 2)
+        exp          = daily_expected.get(date_str, {"expected_wh": 0.0, "hot_hours": 0})
+        expected_kwh = round(exp["expected_wh"] / 1000, 2)
+        pr = round(actual_kwh / expected_kwh * 100, 1) if expected_kwh > 0 and actual_kwh > 0 else None
         gap_pct = round((expected_kwh - actual_kwh) / expected_kwh * 100, 1) if expected_kwh > 0 else 0
         daily_bars.append({
             "date":         date_str,
@@ -109,7 +123,7 @@ from(bucket: "{BUCKET}")
             "pr_pct":       pr,
             "gap_pct":      max(gap_pct, 0),
             "underperform": gap_pct > 10,
-            "hot_hours":    d["hot_hours"],
+            "hot_hours":    exp["hot_hours"],
         })
 
     # ── 2. PR trend (rolling 7-day windows) ───────────────────────────────────
@@ -122,7 +136,8 @@ from(bucket: "{BUCKET}")
             pr_7d = round(tot_actual / tot_expected * 100, 1) if tot_expected > 0 else None
             pr_trend.append({"date": window[-1]["date"], "pr_7d": pr_7d})
 
-    # ── 3. Hour-of-day efficiency profile ────────────────────────────────────
+    # ── 3. Hour-of-day efficiency profile (power_now_w is fine here — gaps affect
+    #       individual hours but the average across many days self-corrects) ────
     flux_hourly = f'''
 from(bucket: "{BUCKET}")
   |> range(start: -{days}d)
