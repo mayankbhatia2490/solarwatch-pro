@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     telegram_chat_id: str = ""
 
     installed_capacity_w: float = 3570.0  # 6 × Vikram Solar HyperSol 595W STC
-    electricity_tariff_inr: float = 6.5
+    electricity_tariff_inr: float = 6.32  # blended rate at 687 units/mo (bill verified May-2026)
     system_cost_inr: float = 190000.0
     installation_date: str = "2025-04-17"
     plant_name: str = "My Solar System"
@@ -36,13 +36,13 @@ class Settings(BaseSettings):
     tariff_slab3_rate: float = 6.50
     tariff_slab4_rate: float = 7.00      # 501+ units
 
-    tariff_fuel_surcharge_per_unit: float = 0.35   # ₹/unit (variable — check latest bill)
-    tariff_electricity_duty_pct: float = 5.0        # % of energy charges
-    tariff_meter_rent_inr: float = 30.0             # ₹/month fixed
+    tariff_fuel_surcharge_per_unit: float = 0.35   # ₹/unit on net billed units (0 when solar covers all)
+    tariff_electricity_duty_pct: float = 5.0        # % of energy charges (confirmed May-2026 bill)
+    tariff_meter_rent_inr: float = 0.0              # MMC = ₹0 for this connection (bill verified May-2026)
 
     # ── Consumption baseline — used for UHBVN bill savings calculation ──────────
     # Set to your actual monthly grid consumption from your electricity bill.
-    monthly_consumption_kwh: float = 600.0   # ₹/month household consumption
+    monthly_consumption_kwh: float = 687.0   # actual: import(442) + self-consumed solar(245) — May-2026 bill
 
     # ── Gemini AI — daily report analysis (free tier: 15 RPM, 1M tokens/day) ───
     # Get a free key at: https://aistudio.google.com/app/apikey
