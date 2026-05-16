@@ -374,6 +374,7 @@ export default function Dashboard() {
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [refreshing, setRefreshing]   = useState(false);
   const [livePower, setLivePower]     = useState<number | null>(null);
+  const [nightFallback, setNightFallback] = useState(false);
   const liveTimerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
   const loadLivePower = useCallback(async () => {
@@ -399,7 +400,16 @@ export default function Dashboard() {
       ]);
       setSummary(s);
       setLivePower(s.power_now_w ?? 0);
-      setChart(c);
+
+      // At night, "today" has no data yet — auto-show yesterday with a banner
+      let chartData = c;
+      let usedNightFallback = false;
+      if (chartRange === "today" && s?.is_night && (!c?.data || c.data.length === 0)) {
+        chartData = await fetchDailyChart("yesterday").catch(() => c);
+        usedNightFallback = true;
+      }
+      setNightFallback(usedNightFallback);
+      setChart(chartData);
       setScorecard(sc);
       setAnalysis(an);
       setCleaning(cl);
@@ -483,10 +493,19 @@ export default function Dashboard() {
       {/* Generation chart */}
       <div className="glass-card rounded-2xl p-5">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4 relative">
-          <h2 className="font-semibold" style={{ color: "var(--card-title)" }}>Generation Chart</h2>
+          <div>
+            <h2 className="font-semibold" style={{ color: "var(--card-title)" }}>
+              Generation Chart{nightFallback ? " — Yesterday" : ""}
+            </h2>
+            {nightFallback && (
+              <p className="text-xs mt-0.5" style={{ color: "var(--card-sub)" }}>
+                🌙 Night mode · Today&apos;s data starts at sunrise ({summary?.sunrise ? new Date(summary.sunrise).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "~6:00 AM"})
+              </p>
+            )}
+          </div>
           <ChartRangeBar range={chartRange} setRange={setChartRange} from={customFrom} to={customTo} setFrom={setCustomFrom} setTo={setCustomTo} />
         </div>
-        <GenerationChart data={chart?.data ?? []} />
+        <GenerationChart data={chart?.data ?? []} isNight={night && !nightFallback} sunrise={summary?.sunrise} />
       </div>
 
       {/* ── 7-day Performance section ─────────────────────────────────────────── */}

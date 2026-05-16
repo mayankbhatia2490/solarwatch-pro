@@ -6,9 +6,11 @@ const ApexChart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
 interface GenerationChartProps {
   data: { time: string; power_w: number; expected_w: number }[];
+  isNight?: boolean;
+  sunrise?: string;
 }
 
-export function GenerationChart({ data }: GenerationChartProps) {
+export function GenerationChart({ data, isNight, sunrise }: GenerationChartProps) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
 
@@ -70,9 +72,20 @@ export function GenerationChart({ data }: GenerationChartProps) {
   ];
 
   if (!data.length) {
+    const sunriseStr = sunrise
+      ? new Date(sunrise).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
+      : "~6:00 AM";
     return (
-      <div className="flex items-center justify-center h-64 text-sm" style={{ color: "var(--card-sub)" }}>
-        No data for selected range
+      <div className="flex flex-col items-center justify-center h-64 gap-2 select-none">
+        {isNight ? (
+          <>
+            <span className="text-3xl">🌙</span>
+            <span className="text-sm font-medium" style={{ color: "var(--card-value)" }}>System resting overnight</span>
+            <span className="text-xs" style={{ color: "var(--card-sub)" }}>Generation resumes at sunrise · {sunriseStr}</span>
+          </>
+        ) : (
+          <span className="text-sm" style={{ color: "var(--card-sub)" }}>No data for selected range</span>
+        )}
       </div>
     );
   }
