@@ -292,32 +292,25 @@ async def daily_chart(
 
     stop_clause = f"|> range(start: {start}, stop: {stop})" if stop != "now()" else f"|> range(start: {start})"
 
-    # ── Fetch actual power from InfluxDB ──────────────────────────────────────
-
-    if multi_day:
-        # Single-field query — no pivot needed; value comes from r.get_value()
-        flux_actual = f'''
-from(bucket: "{BUCKET}")
-  {stop_clause}
-  |> filter(fn: (r) => r["_field"] == "power_now_w")
-  |> aggregateWindow(every: {window}, fn: mean, createEmpty: false)
-'''
-        loop = asyncio.get_event_loop()
-        recs, om_map = await asyncio.gather(
-            loop.run_in_executor(None, lambda: query(flux_actual)),
-            _om_expected_map(past_days),
-        )
-    else:
-        # Short range: both fields pivoted — values come from vals.get(field_name)
-        flux_short = f'''
+    # ── Fetch chart data from InfluxDB + Open-Meteo (concurrent) ────────────
+    # Always pivot both fields — pivot correctly populates vals["power_now_w"]
+    # even when expected_power_w is null for a window.
+    # For multi-day we replace expected_w with Open-Meteo bell curves.
+    flux_chart = f'''
 from(bucket: "{BUCKET}")
   {stop_clause}
   |> filter(fn: (r) => r["_field"] == "power_now_w" or r["_field"] == "expected_power_w")
   |> aggregateWindow(every: {window}, fn: mean, createEmpty: false)
   |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
 '''
-        loop = asyncio.get_event_loop()
-        recs   = await loop.run_in_executor(None, lambda: query(flux_short))
+    loop = asyncio.get_running_loop()
+    if multi_day:
+        recs, om_map = await asyncio.gather(
+            loop.run_in_executor(None, lambda: query(flux_chart)),
+            _om_expected_map(past_days),
+        )
+    else:
+        recs   = await loop.run_in_executor(None, lambda: query(flux_chart))
         om_map = {}
 
     # ── Build chart data ──────────────────────────────────────────────────────
@@ -325,17 +318,11 @@ from(bucket: "{BUCKET}")
     chart_data = []
 
     for r in recs:
-        ts   = r.get_time()
-        vals = r.values
+        ts      = r.get_time()
+        vals    = r.values
+        power_w = round(float(vals.get("power_now_w") or 0), 1)
 
-        # Multi-day: single field query → value in r.get_value()
-        # Short range: pivoted query → value in vals["power_now_w"]
-        if multi_day:
-            power_w = round(float(r.get_value() or 0), 1)
-        else:
-            power_w = round(float(vals.get("power_now_w") or 0), 1)
-
-        if multi_day and om_map:
+        if om_map:
             ist_dt     = ts.astimezone(_IST)
             hour_key   = ist_dt.strftime("%Y-%m-%dT%H:00")
             expected_w = om_map.get(hour_key, 0.0)
