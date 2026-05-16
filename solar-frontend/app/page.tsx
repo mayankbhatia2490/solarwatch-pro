@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
 import { Sun, Zap, IndianRupee, Leaf, Activity, Cloud, CloudSun, CloudDrizzle, RefreshCw, TrendingUp, AlertCircle, CheckCircle, AlertTriangle, Calendar, Droplets } from "lucide-react";
 import { GenerationChart } from "@/components/generation-chart";
-import { SmartSuggestions } from "@/components/smart-suggestions";
+import { ActionCards } from "@/components/action-cards";
 import { fetchDashboardSummary, fetchDailyChart, fetchHealthScorecard } from "@/lib/api";
 
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false });
@@ -502,8 +502,8 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* AI Smart Suggestions */}
-      <SmartSuggestions />
+      {/* Action flashcards — only shown when there are quick wins */}
+      <ActionCards />
 
       {/* Environmental + Payback */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
