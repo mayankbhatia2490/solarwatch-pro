@@ -166,16 +166,24 @@ async def dashboard_summary():
     co2_today = round(energy_today * CO2_KG_PER_KWH, 2)
     capacity_pct = round(power / CAPACITY_W * 100, 1) if CAPACITY_W > 0 else 0
 
-    # Monthly savings
+    # Monthly energy — aggregateWindow/pivot don't work on this InfluxDB instance.
+    # Query all daily_energy_kwh since month start, keep max per IST day, sum in Python.
+    _IST_OFF = timezone(timedelta(hours=5, minutes=30))
     flux_month = f'''
 from(bucket: "{BUCKET}")
   |> range(start: {date.today().replace(day=1).isoformat()}T00:00:00Z)
   |> filter(fn: (r) => r["_field"] == "daily_energy_kwh")
-  |> aggregateWindow(every: 1d, fn: max, createEmpty: false)
-  |> sum()
+  |> filter(fn: (r) => r["_value"] > 0)
+  |> sort(columns: ["_time"])
 '''
     month_recs = query(flux_month)
-    energy_month = _correct(float(month_recs[0].get_value()) if month_recs else 0.0)
+    _day_max: dict[str, float] = {}
+    for rec in month_recs:
+        day_key = rec.get_time().astimezone(_IST_OFF).strftime("%Y-%m-%d")
+        val = float(rec.get_value() or 0)
+        if val > _day_max.get(day_key, 0.0):
+            _day_max[day_key] = val
+    energy_month = _correct(sum(_day_max.values()))
 
     # Payback calculation
     install_date = datetime.fromisoformat(settings.installation_date)
