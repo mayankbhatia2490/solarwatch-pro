@@ -26,6 +26,29 @@ BUCKET       = settings.influxdb_bucket
 WINDOW_DAYS  = 7   # compare 7 days before vs 7 days after
 
 
+def _get_peak_sun_hours() -> float:
+    """
+    Compute peak sun hours from actual InfluxDB POA irradiance (last 30 days).
+    PSH = mean_daily_POA × daylight_hours / 1000
+    Karnal daylight varies 10–14h; use 12h as year-round average.
+    Returns measured PSH or 4.5 fallback if no InfluxDB data.
+    """
+    flux_psh = f'''
+from(bucket: "{BUCKET}")
+  |> range(start: -30d)
+  |> filter(fn: (r) => r["_field"] == "poa_irradiance_wm2")
+  |> filter(fn: (r) => r["_value"] > 10)
+  |> aggregateWindow(every: 1d, fn: mean, createEmpty: false)
+  |> mean()
+'''
+    psh_recs = query(flux_psh)
+    if psh_recs:
+        mean_poa = float(psh_recs[0].get_value() or 0)
+        # mean_poa is the average W/m² during daylight; × daylight_hours ≈ PSH
+        return round(mean_poa * 12 / 1000, 2) if mean_poa > 50 else 4.5
+    return 4.5  # fallback only if no InfluxDB data
+
+
 # ── Models ────────────────────────────────────────────────────────────────────
 
 class CleaningEvent(BaseModel):
@@ -101,9 +124,9 @@ def _enrich_event(event: dict) -> dict:
 
     if eff_before is not None and eff_after is not None:
         gain_pct = round(eff_after - eff_before, 1)
-        # Estimate monthly rupee gain: capacity × avg_irradiance_hours × gain_fraction × tariff × 30 days
-        # Simplified: 4.5 peak sun hours/day for Karnal
-        peak_sun_hours = 4.5
+        # Estimate monthly rupee gain: capacity × PSH × gain_fraction × tariff × 30 days
+        # PSH computed from real InfluxDB POA irradiance data (not hardcoded)
+        peak_sun_hours = _get_peak_sun_hours()
         monthly_gain_kwh = (
             settings.installed_capacity_w / 1000
             * peak_sun_hours * 30
@@ -195,10 +218,11 @@ def get_next_cleaning() -> Dict[str, Any]:
     eff      = _current_efficiency()
 
     # If efficiency is measurable, compute rupee cost of delay
+    # PSH computed from real InfluxDB POA irradiance data (not hardcoded)
     loss_inr_per_day = 0.0
     if eff is not None and eff < 90.0:
         loss_fraction     = (90.0 - eff) / 100.0  # efficiency gap vs 90% clean baseline
-        peak_sun_hours    = 4.5
+        peak_sun_hours    = _get_peak_sun_hours()
         daily_loss_kwh    = settings.installed_capacity_w / 1000 * peak_sun_hours * loss_fraction
         loss_inr_per_day  = round(daily_loss_kwh * settings.electricity_tariff_inr, 1)
 

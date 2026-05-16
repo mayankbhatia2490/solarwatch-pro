@@ -11,8 +11,30 @@ import math
 
 router = APIRouter(prefix="/api/maintenance", tags=["Maintenance"])
 
-BUCKET       = settings.influxdb_bucket
-PEAK_SUN_HRS = 4.5   # Karnal annual average peak sun hours/day
+BUCKET = settings.influxdb_bucket
+
+
+def _get_peak_sun_hours() -> float:
+    """
+    Compute peak sun hours from actual InfluxDB POA irradiance (last 30 days).
+    PSH = mean_daily_POA × daylight_hours / 1000
+    Karnal daylight varies 10–14h; use 12h as year-round average.
+    Returns measured PSH or 4.5 fallback if no InfluxDB data.
+    """
+    flux_psh = f'''
+from(bucket: "{BUCKET}")
+  |> range(start: -30d)
+  |> filter(fn: (r) => r["_field"] == "poa_irradiance_wm2")
+  |> filter(fn: (r) => r["_value"] > 10)
+  |> aggregateWindow(every: 1d, fn: mean, createEmpty: false)
+  |> mean()
+'''
+    psh_recs = query(flux_psh)
+    if psh_recs:
+        mean_poa = float(psh_recs[0].get_value() or 0)
+        # mean_poa is the average W/m² during daylight; × daylight_hours ≈ PSH
+        return round(mean_poa * 12 / 1000, 2) if mean_poa > 50 else 4.5
+    return 4.5  # fallback only if no InfluxDB data
 
 
 # ── Linear regression helper ──────────────────────────────────────────────────
@@ -141,7 +163,7 @@ def _analyze_soiling(series: list[float]) -> dict:
 
     # Compute financial impact
     lost_pct = max(0, 90.0 - (current_eff or 90.0))  # vs 90% clean baseline
-    daily_loss_kwh  = settings.installed_capacity_w / 1000 * PEAK_SUN_HRS * (lost_pct / 100)
+    daily_loss_kwh  = settings.installed_capacity_w / 1000 * _get_peak_sun_hours() * (lost_pct / 100)
     monthly_loss_inr = round(daily_loss_kwh * settings.electricity_tariff_inr * 30, 0)
 
     return {
@@ -265,7 +287,7 @@ def get_maintenance_status() -> Dict[str, Any]:
             "fix_cost_inr":    1500,
             "revenue_saved_inr": round(
                 settings.installed_capacity_w / 1000
-                * PEAK_SUN_HRS * 30
+                * _get_peak_sun_hours() * 30
                 * ((thermal["max_temp_c"] - 75) / 100)
                 * settings.electricity_tariff_inr
             ) if thermal["max_temp_c"] > 75 else 0,

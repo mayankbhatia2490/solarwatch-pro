@@ -191,6 +191,15 @@ from(bucket: "{BUCKET}")
     total_recs = query(flux_total)
     total_energy_kwh = float(total_recs[0].get_value()) if total_recs else 0
 
+    # FIX 9: Expose measured PR from ≥30 days alongside design target.
+    # Count distinct days in the 30-day PR dataset.
+    distinct_dates = set()
+    for r in pr_recs:
+        distinct_dates.add(r.get_time().date())
+    measured_pr_pct = None
+    if len(distinct_dates) >= 30 and data_sufficient:
+        measured_pr_pct = performance_ratio  # already computed above
+
     return {
         "status": "success",
         "data": {
@@ -199,7 +208,14 @@ from(bucket: "{BUCKET}")
             "expected_degradation_pct": round(expected_deg, 2),
             "actual_degradation_pct": actual_deg,
             "baseline_pr": round(baseline_pr, 1) if baseline_pr else None,
+            # performance_ratio: null when <20 samples (data_sufficient=false)
             "performance_ratio": performance_ratio,
+            "data_sufficient": data_sufficient,
+            # measured_pr_pct: actual measured PR from ≥30 days of real data; null if insufficient
+            # Frontend should show "Your measured PR: X%" alongside design target
+            "measured_pr_pct": measured_pr_pct,
+            # design_pr_pct: KSY 3.4kW-1Ph India rooftop design assumption
+            "design_pr_pct": 78.0,
             "total_energy_kwh": round(total_energy_kwh, 1),
             "yoy_data": yoy_data,
             "best_days": best_days,

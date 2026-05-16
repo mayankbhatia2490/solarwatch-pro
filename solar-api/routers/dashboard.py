@@ -143,9 +143,16 @@ from(bucket: "{BUCKET}")
     }
     health_score = _compute_health(live)
 
-    # UHBVN slab-rate savings (assumes a 300 kWh/month household consumption baseline)
-    # The effective savings per kWh is higher than flat rate because solar offsets expensive slabs first
-    assumed_monthly_consumption = 300.0
+    # UHBVN slab-rate savings — use real average monthly consumption from stored bills
+    # Falls back to 300 kWh/month if no electricity_bill measurement in InfluxDB
+    flux_bills = f'''
+from(bucket: "{BUCKET}")
+  |> range(start: -365d)
+  |> filter(fn: (r) => r["_measurement"] == "electricity_bill" and r["_field"] == "units_consumed_kwh")
+  |> mean()
+'''
+    bill_recs = query(flux_bills)
+    assumed_monthly_consumption = float(bill_recs[0].get_value()) if bill_recs else 300.0
     bill_data = solar_bill_savings(energy_month, assumed_monthly_consumption)
 
     return {
@@ -161,7 +168,8 @@ from(bucket: "{BUCKET}")
         "savings_total_inr": total_savings,
         "co2_today_kg": co2_today,
         "co2_total_kg": round(total_energy * CO2_KG_PER_KWH, 1),
-        "trees_equivalent": round(total_energy * CO2_KG_PER_KWH / 21, 1),
+        # 22 kg CO2/tree/year — ICFRE estimate for Indian deciduous species
+        "trees_equivalent": round(total_energy * CO2_KG_PER_KWH / 22, 1),
         "total_energy_kwh": total_energy,
         "health_score": health_score,
         "status": "online" if status == 0 else "offline",

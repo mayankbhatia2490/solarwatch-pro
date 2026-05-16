@@ -38,9 +38,10 @@ export default function WeatherPage() {
   const uvMax = daily.uv_index_max?.[0] ?? "--";
 
   const capacity_kw = ((data.data.system_capacity_w || 3500) / 1000).toFixed(1);
-  const expectedW = data.data.expected_power_w ?? 0;
+  // expected_power_w and efficiency_drop_pct are null when weather API is unavailable
+  const expectedW: number | null = data.data.expected_power_w ?? null;
   const actualW = data.data.actual_power_w ?? 0;
-  const effDrop = data.data.efficiency_drop_pct ?? 0;
+  const effDrop: number | null = data.data.efficiency_drop_pct ?? null;
   const pr = ((data.data.performance_ratio_used || 0.78) * 100).toFixed(0);
 
   // Sky condition label
@@ -153,8 +154,17 @@ export default function WeatherPage() {
           </div>
           <div className="bg-[var(--bg-hover)] p-4 rounded-xl">
             <div className="text-sm text-[var(--text-secondary)] mb-1">Expected Power (Weather-Adj.)</div>
-            <div className="text-3xl font-bold text-amber-400">{expectedW} <span className="text-sm font-normal">W</span></div>
-            <div className="text-xs text-[var(--text-muted)] mt-1">{capacity_kw}kW × (Irr/1000) × PR</div>
+            {expectedW !== null ? (
+              <>
+                <div className="text-3xl font-bold text-amber-400">{expectedW} <span className="text-sm font-normal">W</span></div>
+                <div className="text-xs text-[var(--text-muted)] mt-1">{capacity_kw}kW × (Irr/1000) × PR</div>
+              </>
+            ) : (
+              <>
+                <div className="text-3xl font-bold text-slate-500">—</div>
+                <div className="text-xs text-[var(--text-muted)] mt-1">Unavailable — weather data offline</div>
+              </>
+            )}
           </div>
           <div className="bg-[var(--bg-hover)] p-4 rounded-xl">
             <div className="text-sm text-[var(--text-secondary)] mb-1">Actual Power (Inverter Live)</div>
@@ -162,14 +172,20 @@ export default function WeatherPage() {
           </div>
         </div>
 
-        {/* Efficiency gap */}
-        {expectedW > 100 && (
+        {/* Efficiency gap — only shown when real expected_power_w is available */}
+        {expectedW !== null && expectedW > 100 && effDrop !== null && (
           <div className="mt-4 flex items-center gap-3">
             <Zap className="w-5 h-5 text-purple-400" />
             <span className="text-sm text-[var(--text-secondary)]">Performance Gap:</span>
             <span className={`text-lg font-bold ${effDrop > 20 ? "text-red-400" : effDrop > 10 ? "text-amber-400" : "text-emerald-400"}`}>
               {effDrop}% {effDrop > 20 ? "⚠ Check panels/shading" : effDrop > 10 ? "↓ Minor loss" : "✓ Normal"}
             </span>
+          </div>
+        )}
+        {(expectedW === null || effDrop === null) && (
+          <div className="mt-4 flex items-center gap-3">
+            <Zap className="w-5 h-5 text-slate-500" />
+            <span className="text-sm text-[var(--text-muted)]">Performance gap unavailable — weather data offline</span>
           </div>
         )}
       </div>

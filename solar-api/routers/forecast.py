@@ -7,6 +7,7 @@ from typing import Dict, Any
 import httpx
 from datetime import datetime, date, timedelta, timezone
 from config import settings
+from cal_utils import calibration_factor
 
 router = APIRouter(prefix="/api/forecast", tags=["Forecast"])
 
@@ -25,14 +26,16 @@ NOCT               = 45.0     # °C (IEC standard)
 BIFACIAL_REAR_GAIN = 0.09     # 9% rear irradiance at 5° tilt on concrete roof
 
 
-def _expected_power(poa_wm2: float, temp_c: float) -> float:
+def _expected_power(poa_wm2: float, temp_c: float, month: int) -> float:
     """
     Temperature-corrected STC formula — matches collector logic exactly.
     Uses POA (plane-of-array) irradiance and IEC NOCT cell temperature model.
+    Applies monthly irradiance calibration factor from irradiance_cal.json.
     """
     T_cell = temp_c + (NOCT - 20.0) * (poa_wm2 / 800.0)
     correction = 1 + TEMP_COEFF * (T_cell - 25.0)
-    return max(0.0, (poa_wm2 / 1000.0) * CAPACITY_W * (1 + BIFACIAL_REAR_GAIN) * PR * correction)
+    cal = calibration_factor(month)
+    return max(0.0, (poa_wm2 / 1000.0) * CAPACITY_W * (1 + BIFACIAL_REAR_GAIN) * PR * correction * cal)
 
 
 @router.get("")
@@ -70,7 +73,9 @@ async def get_forecast() -> Dict[str, Any]:
     for i, t in enumerate(times):
         irr_poa = (poa[i] or 0) if i < len(poa) else 0
         temp_c  = (temps[i] or 30.0) if i < len(temps) else 30.0
-        power   = round(_expected_power(irr_poa, temp_c))
+        # Extract month from timestamp string "YYYY-MM-DDTHH:MM" for calibration
+        slot_month = int(t[5:7]) if len(t) >= 7 else date.today().month
+        power   = round(_expected_power(irr_poa, temp_c, slot_month))
         hourly_forecast.append({
             "time":             t,
             "expected_power_w": power,
@@ -90,7 +95,9 @@ async def get_forecast() -> Dict[str, Any]:
         day_date  = today + timedelta(days=d_idx)
         day_str   = day_date.isoformat()
         day_hours = [h for h in hourly_forecast if h["time"].startswith(day_str)]
-        kwh       = round(sum(h["expected_power_w"] for h in day_hours) / 1000, 2)
+        # kWh = sum of hourly power (W) × interval (1h) / 1000; Open-Meteo is 1-hour slots
+        interval_hours = 1.0
+        kwh       = round(sum(h["expected_power_w"] * interval_hours for h in day_hours) / 1000, 2)
         savings   = round(kwh * settings.electricity_tariff_inr, 1)
         label     = ["Today", "Tomorrow", day_date.strftime("%A")][d_idx]
 
@@ -98,7 +105,17 @@ async def get_forecast() -> Dict[str, Any]:
             sum(h["cloud_cover_pct"] for h in day_hours) / len(day_hours)
             if day_hours else 50
         )
-        confidence = max(40, round(100 - avg_cloud * 0.6))
+        # Tiered confidence by cloud cover quartile — IEA PVPS Task 16 heuristic
+        if avg_cloud < 20:
+            confidence = 90
+        elif avg_cloud < 40:
+            confidence = 75
+        elif avg_cloud < 60:
+            confidence = 60
+        elif avg_cloud < 80:
+            confidence = 45
+        else:
+            confidence = 30
 
         daily_summaries.append({
             "date":             day_str,
