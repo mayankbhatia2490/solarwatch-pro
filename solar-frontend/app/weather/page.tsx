@@ -68,17 +68,17 @@ export default function WeatherPage() {
         <div className="themed-card p-4 col-span-1">
           <div className="flex items-center gap-2 mb-2">
             <div className="p-1.5 rounded-lg bg-[var(--bg-hover)] text-amber-500"><Sun className="w-4 h-4" /></div>
-            <div className="text-xs font-medium text-[var(--text-secondary)]">Direct Irr.</div>
+            <div className="text-xs font-medium text-[var(--text-secondary)]">POA Irradiance</div>
           </div>
-          <div className="text-xl font-bold">{current.direct_radiation ?? "--"} <span className="text-xs font-normal text-[var(--text-muted)]">W/m²</span></div>
+          <div className="text-xl font-bold">{current.poa_irradiance_wm2 != null ? Math.round(current.poa_irradiance_wm2) : "--"} <span className="text-xs font-normal text-[var(--text-muted)]">W/m²</span></div>
         </div>
 
         <div className="themed-card p-4 col-span-1">
           <div className="flex items-center gap-2 mb-2">
             <div className="p-1.5 rounded-lg bg-[var(--bg-hover)] text-yellow-300"><Sun className="w-4 h-4" /></div>
-            <div className="text-xs font-medium text-[var(--text-secondary)]">Diffuse Irr.</div>
+            <div className="text-xs font-medium text-[var(--text-secondary)]">Shortwave (GHI)</div>
           </div>
-          <div className="text-xl font-bold">{current.diffuse_radiation ?? "--"} <span className="text-xs font-normal text-[var(--text-muted)]">W/m²</span></div>
+          <div className="text-xl font-bold">{current.shortwave_radiation != null ? Math.round(current.shortwave_radiation) : "--"} <span className="text-xs font-normal text-[var(--text-muted)]">W/m²</span></div>
         </div>
 
         <div className="themed-card p-4 col-span-1">
@@ -150,7 +150,7 @@ export default function WeatherPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-[var(--bg-hover)] p-4 rounded-xl">
             <div className="text-sm text-[var(--text-secondary)] mb-1">Total Irradiance</div>
-            <div className="text-3xl font-bold text-amber-400">{current.total_irradiance ?? (current.direct_radiation + current.diffuse_radiation)} <span className="text-sm font-normal">W/m²</span></div>
+            <div className="text-3xl font-bold text-amber-400">{current.poa_irradiance_wm2 != null ? Math.round(current.poa_irradiance_wm2) : "--"} <span className="text-sm font-normal">W/m²</span></div>
           </div>
           <div className="bg-[var(--bg-hover)] p-4 rounded-xl">
             <div className="text-sm text-[var(--text-secondary)] mb-1">Expected Power (Weather-Adj.)</div>

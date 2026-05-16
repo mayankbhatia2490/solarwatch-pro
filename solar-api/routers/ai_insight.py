@@ -12,6 +12,7 @@ import httpx
 
 from influx import query
 from config import settings
+from cal_utils import calibration_factor
 
 router = APIRouter(prefix="/api/ai", tags=["AI Insight"])
 
@@ -110,8 +111,10 @@ from(bucket: "{BUCKET}")
         temp     = float(r.values.get("internal_radiator_temperature", 0) or 0)
 
         if expected > 50:
+            month = int(date_str[5:7])
+            cal   = calibration_factor(month)
             daily[date_str]["actual_wh"]   += actual
-            daily[date_str]["expected_wh"] += expected
+            daily[date_str]["expected_wh"] += expected * cal
             daily[date_str]["hours"]       += 1
             if temp > TEMP_WARN:
                 daily[date_str]["hot_hours"] += 1

@@ -180,7 +180,11 @@ from(bucket: "{BUCKET}")
     # ── 4. Summary KPIs ───────────────────────────────────────────────────────
     total_actual_kwh   = sum(d["actual_kwh"]   for d in daily_bars)
     total_expected_kwh = sum(d["expected_kwh"] for d in daily_bars)
-    overall_pr         = round(total_actual_kwh / total_expected_kwh * 100, 1) if total_expected_kwh > 0 else 0
+    overall_pr_raw     = round(total_actual_kwh / total_expected_kwh * 100, 1) if total_expected_kwh > 0 else 0
+    # Cap at 110% — a bifacial system can slightly exceed 100% due to rear gain, but
+    # anything above ~105% signals the calibration file has an overcorrective factor.
+    overall_pr         = min(overall_pr_raw, 110.0)
+    calibration_warning = overall_pr_raw > 105
     lost_kwh           = max(total_expected_kwh - total_actual_kwh, 0)
     lost_inr           = round(lost_kwh * TARIFF, 0)
     underperform_days  = [d for d in daily_bars if d["underperform"]]
@@ -270,7 +274,8 @@ from(bucket: "{BUCKET}")
             "lost_kwh":           round(lost_kwh, 1),
             "lost_inr":           int(lost_inr),
             "underperform_days":  len(underperform_days),
-            "total_days":         len(daily_bars),
+            "total_days":         min(len(daily_bars), days),
+            "calibration_warning": calibration_warning,
         },
         "daily_bars":     daily_bars,
         "pr_trend":       pr_trend,
