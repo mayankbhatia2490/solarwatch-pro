@@ -119,9 +119,12 @@ async def get_weather() -> Dict[str, Any]:
     temp_c = om_current.get("temperature_2m") or _get_live_temp() or 35.0
     if poa_irradiance is not None and poa_irradiance > 0:
         expected_power_w = _expected_power(poa_irradiance, temp_c, current_month)
+        # Only meaningful above ~15% of capacity — below that, inverter
+        # partial-load losses dominate and large gaps are normal.
+        _gap_threshold_w = CAPACITY_W * 0.15
         efficiency_drop_pct = (
             round(max(0, (expected_power_w - actual_power_w) / expected_power_w * 100), 1)
-            if expected_power_w > 100 else 0.0
+            if expected_power_w > _gap_threshold_w else None
         )
     else:
         expected_power_w    = None

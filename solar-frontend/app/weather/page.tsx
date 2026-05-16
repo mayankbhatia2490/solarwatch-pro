@@ -182,7 +182,13 @@ export default function WeatherPage() {
             </span>
           </div>
         )}
-        {(expectedW === null || effDrop === null) && (
+        {expectedW !== null && effDrop === null && (
+          <div className="mt-4 flex items-center gap-3">
+            <Zap className="w-5 h-5 text-slate-500" />
+            <span className="text-sm text-[var(--text-muted)]">Performance gap not shown — irradiance below 15% capacity (low-light losses dominate at this level)</span>
+          </div>
+        )}
+        {expectedW === null && (
           <div className="mt-4 flex items-center gap-3">
             <Zap className="w-5 h-5 text-slate-500" />
             <span className="text-sm text-[var(--text-muted)]">Performance gap unavailable — weather data offline</span>
