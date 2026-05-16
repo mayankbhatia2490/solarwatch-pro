@@ -106,20 +106,21 @@
       <text x="78" y="133" fill="#f59e0b" font-size="9" text-anchor="middle">237cm</text>
 
       <!-- ═══════════════════════════════════════════
-           PANEL 3 — 28° optimal
-           North/high (LEFT)  x=100, y=56  (334cm)
+           PANEL 3 — 29.7° optimal (latitude tilt)
+           North/high (LEFT)  x=100, y=52  (346cm = 118+228)
            South/low  (RIGHT) x=340, y=175 (118cm)
+           rise = 460 × sin(29.7°) = 228cm
            ═══════════════════════════════════════════ -->
-      <line x1="100" y1="242" x2="100" y2="56"  stroke="#22c55e" stroke-width="1" stroke-dasharray="3,2" opacity="0.4"/>
-      <text x="78"  y="75"  fill="#22c55e" font-size="9" text-anchor="middle">334cm</text>
-      <text x="78"  y="87"  fill="#64748b" font-size="8" text-anchor="middle">(target)</text>
-      <line x1="100" y1="56"  x2="340" y2="175" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-dasharray="10,4" opacity="0.85"/>
+      <line x1="100" y1="242" x2="100" y2="52"  stroke="#22c55e" stroke-width="1" stroke-dasharray="3,2" opacity="0.4"/>
+      <text x="78"  y="68"  fill="#22c55e" font-size="9" text-anchor="middle">346cm</text>
+      <text x="78"  y="80"  fill="#64748b" font-size="8" text-anchor="middle">(target)</text>
+      <line x1="100" y1="52"  x2="340" y2="175" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-dasharray="10,4" opacity="0.85"/>
       <!-- Angle arc -->
-      <path d="M 320 175 A 36 36 0 0 0 289 148" fill="none" stroke="#22c55e" stroke-width="1.5"/>
-      <text x="255" y="148" fill="#22c55e" font-size="11" font-weight="700">28°</text>
-      <text x="195" y="98"  fill="#22c55e" font-size="12" font-weight="700" text-anchor="middle">28° optimal</text>
+      <path d="M 318 175 A 36 36 0 0 0 286 146" fill="none" stroke="#22c55e" stroke-width="1.5"/>
+      <text x="252" y="146" fill="#22c55e" font-size="11" font-weight="700">29.7°</text>
+      <text x="195" y="92"  fill="#22c55e" font-size="12" font-weight="700" text-anchor="middle">29.7° optimal</text>
       <!-- Sun ray optimal -->
-      <line x1="440" y1="58" x2="290" y2="162" stroke="#22c55e" stroke-width="1" stroke-dasharray="5,3" opacity="0.4"/>
+      <line x1="440" y1="58" x2="290" y2="160" stroke="#22c55e" stroke-width="1" stroke-dasharray="5,3" opacity="0.4"/>
 
       <!-- Legend -->
       <rect x="170" y="12" width="12" height="4" fill="#ef4444" rx="2"/>
@@ -127,7 +128,7 @@
       <rect x="240" y="12" width="12" height="4" fill="#f59e0b" rx="2"/>
       <text x="256" y="18" fill="#f59e0b"  font-size="10">15° easy</text>
       <rect x="310" y="12" width="12" height="4" fill="#22c55e" rx="2"/>
-      <text x="326" y="18" fill="#22c55e"  font-size="10">28° optimal</text>
+      <text x="326" y="18" fill="#22c55e"  font-size="10">29.7° optimal</text>
 
     </svg>
   </div>
@@ -186,10 +187,10 @@
           <td><span class="badge badge-amber">Moderate</span></td>
         </tr>
         <tr>
-          <td><strong style="color:#22c55e">28° (optimal)</strong></td>
-          <td>334 cm</td>
-          <td>216 cm</td>
-          <td><span class="badge badge-green">Best yield — tall rear posts</span></td>
+          <td><strong style="color:#22c55e">29.7° (optimal)</strong></td>
+          <td>346 cm</td>
+          <td>228 cm</td>
+          <td><span class="badge badge-green">Best yield — latitude tilt</span></td>
         </tr>
       </tbody>
     </table>
@@ -208,11 +209,11 @@
     <div class="legend" style="margin-bottom:12px">
       <span><span class="legend-dot" style="background:#ef4444"></span>5.2° (current)</span>
       <span><span class="legend-dot" style="background:#f59e0b"></span>15° (easy fix)</span>
-      <span><span class="legend-dot" style="background:#22c55e"></span>28° (optimal)</span>
+      <span><span class="legend-dot" style="background:#22c55e"></span>29.7° (optimal)</span>
     </div>
     <canvas id="monthlyChart" height="240" style="width:100%"></canvas>
     <p style="font-size:0.75rem;color:#475569;margin-top:10px">
-      Based on Open-Meteo Archive actual GHI for Karnal (2025, validated against InfluxDB) · PR=0.83 · Tilt correction via Liu-Jordan model
+      GHI: VEDAS satellite data 2009–2022 long-term avg (1324 kWh/m²/yr) · bifacial 1.09 · PR=0.83 · Liu-Jordan tilt correction · Open-Meteo overestimates winter GHI by 30–60% (fog not modelled)
     </p>
   </div>
 
@@ -221,8 +222,8 @@
     <h2>Annual Summary by Tilt Angle</h2>
     <p style="font-size:0.82rem;color:#94a3b8;margin-bottom:12px">
       Actual measured generation (InfluxDB, Apr 2025–Apr 2026): <strong style="color:#60a5fa">≈ 4,442 kWh/yr</strong>
-      &nbsp;·&nbsp; Model at 5.2° with archive GHI: <strong id="model5Label" style="color:#ef4444">–</strong>
-      &nbsp;·&nbsp; Gap is normal system losses (wiring, inverter efficiency curve, DC/AC clipping)
+      &nbsp;·&nbsp; Model at 5.2° (VEDAS GHI): <strong id="model5Label" style="color:#ef4444">–</strong>
+      &nbsp;·&nbsp; Small gap = normal losses (wiring, inverter curve, soiling)
     </p>
     <table>
       <thead>
@@ -245,33 +246,36 @@
 const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const days   = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
-// Monthly GHI (kWh/m²/day) — actual Open-Meteo archive data for Karnal (validated 2025)
-const ghi = [3.03, 4.46, 5.09, 5.96, 5.83, 5.54, 4.98, 4.46, 4.97, 4.27, 3.70, 3.03];
+// Monthly GHI (kWh/m²/day) — VEDAS satellite data, Karnal long-term avg 2009-2022
+// Source: vedas.sac.gov.in · Annual total: 1324 kWh/m²/year
+// NOTE: Open-Meteo ERA5 overestimates winter GHI by 30-60% (fog/haze not modelled)
+const ghi = [2.00, 2.96, 4.29, 5.57, 4.90, 4.70, 3.45, 4.00, 4.37, 3.13, 2.23, 1.90];
 
 // Tilt correction factors (POA / GHI) for south-facing surface at 29.7°N
-// Based on Liu-Jordan transposition model
+// Liu-Jordan transposition model
 const tiltFactors = {
-  '5°':  [1.10, 1.07, 1.02, 0.98, 0.96, 0.95, 0.96, 0.98, 1.01, 1.06, 1.09, 1.11],
-  '15°': [1.26, 1.18, 1.06, 0.97, 0.91, 0.89, 0.91, 0.95, 1.04, 1.16, 1.24, 1.29],
-  '28°': [1.44, 1.31, 1.09, 0.92, 0.83, 0.80, 0.82, 0.88, 1.05, 1.27, 1.41, 1.49],
+  '5°':   [1.10, 1.07, 1.02, 0.98, 0.96, 0.95, 0.96, 0.98, 1.01, 1.06, 1.09, 1.11],
+  '15°':  [1.26, 1.18, 1.06, 0.97, 0.91, 0.89, 0.91, 0.95, 1.04, 1.16, 1.24, 1.29],
+  '29.7°':[1.52, 1.38, 1.15, 0.94, 0.83, 0.79, 0.81, 0.88, 1.09, 1.34, 1.50, 1.58],
 };
 
-const CAPACITY = 3.57; // kWp
+const CAPACITY = 3.57;  // kWp
+const BIFACIAL = 1.09;  // rear gain N-type bifacial on concrete
 const PR       = 0.83;
 
 function monthlyKwh(tiltKey) {
-  return tiltFactors[tiltKey].map((f, i) => {
-    return Math.round(ghi[i] * days[i] * CAPACITY * PR * f);
-  });
+  return tiltFactors[tiltKey].map((f, i) =>
+    Math.round(ghi[i] * days[i] * CAPACITY * BIFACIAL * PR * f)
+  );
 }
 
-const data5  = monthlyKwh('5°');
-const data15 = monthlyKwh('15°');
-const data28 = monthlyKwh('28°');
+const data5   = monthlyKwh('5°');
+const data15  = monthlyKwh('15°');
+const data297 = monthlyKwh('29.7°');
 
-const total5  = data5.reduce((a,b)=>a+b,0);
-const total15 = data15.reduce((a,b)=>a+b,0);
-const total28 = data28.reduce((a,b)=>a+b,0);
+const total5   = data5.reduce((a,b)=>a+b,0);
+const total15  = data15.reduce((a,b)=>a+b,0);
+const total297 = data297.reduce((a,b)=>a+b,0);
 
 // ── Bar Chart ─────────────────────────────────────────────────────────────────
 const canvas = document.getElementById('monthlyChart');
@@ -288,13 +292,13 @@ ctx.scale(dpr, dpr);
 const pad = { top: 20, right: 20, bottom: 40, left: 44 };
 const chartW = W - pad.left - pad.right;
 const chartH = H - pad.top  - pad.bottom;
-const maxVal = Math.max(...data28) * 1.1;
+const maxVal = Math.max(...data297) * 1.1;
 
 const groupW  = chartW / 12;
 const barW    = groupW * 0.25;
 const gap     = groupW * 0.04;
 const colors  = ['#ef4444', '#f59e0b', '#22c55e'];
-const datasets = [data5, data15, data28];
+const datasets = [data5, data15, data297];
 
 ctx.font = '10px -apple-system, sans-serif';
 ctx.fillStyle = '#475569';
@@ -347,9 +351,9 @@ ctx.restore();
 // ── Summary Table ─────────────────────────────────────────────────────────────
 const tbody = document.getElementById('summaryTable');
 const rows = [
-  { label: '5.2° (current)', data: data5,  total: total5,  color: '#ef4444', base: true },
-  { label: '15°',            data: data15, total: total15, color: '#f59e0b', base: false },
-  { label: '28° (optimal)',  data: data28, total: total28, color: '#22c55e', base: false },
+  { label: '5.2° (current)',      data: data5,   total: total5,   color: '#ef4444', base: true },
+  { label: '15°',                 data: data15,  total: total15,  color: '#f59e0b', base: false },
+  { label: '29.7° (optimal)',     data: data297, total: total297, color: '#22c55e', base: false },
 ];
 const TARIFF = 7.7; // avg blended UHBVN tariff incl. surcharge
 
@@ -662,10 +666,10 @@ animCanvas.addEventListener('click', () => { animPlaying = !animPlaying; drawSun
 })();
 
 // ── Model vs actual label
-document.getElementById('model5Label').textContent = total5.toLocaleString() + ' kWh/yr';
+document.getElementById('model5Label').textContent = total5.toLocaleString() + ' kWh/yr (VEDAS data)';
 
 // Populate improvement stats
-const gain28 = total28 - total5;
+const gain28 = total297 - total5;
 document.getElementById('improvementStats').innerHTML = `
   <div class="stat">
     <div class="stat-val" style="color:#22c55e">+${gain28} kWh</div>
