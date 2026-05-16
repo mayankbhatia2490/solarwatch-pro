@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Upload, FileText, CheckCircle, AlertCircle, Zap, IndianRupee, Calendar, RefreshCw } from "lucide-react";
+import { Upload, FileText, CheckCircle, AlertCircle, Zap, IndianRupee, Calendar, RefreshCw, TrendingUp } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -129,6 +129,20 @@ export default function BillsPage() {
   const fv = (k: string) => form[k] ?? "";
   const sf = (k: string) => (v: string) => setForm(f => ({ ...f, [k]: v }));
 
+  // DHBVN sizing formula: kW Required = avg monthly units / 120
+  const SYSTEM_KW = 3.57;
+  const billsWithConsumption = history.filter(b => b.units_consumed_kwh != null && b.units_consumed_kwh > 0);
+  const avgMonthlyKwh = billsWithConsumption.length > 0
+    ? billsWithConsumption.reduce((s, b) => s + (b.units_consumed_kwh ?? 0), 0) / billsWithConsumption.length
+    : null;
+  const requiredKw   = avgMonthlyKwh != null ? avgMonthlyKwh / 120 : null;
+  const suggestedMin = requiredKw != null ? requiredKw * 1.1 : null;
+  const suggestedMax = requiredKw != null ? requiredKw * 1.2 : null;
+  const sizingVerdict = requiredKw == null ? null
+    : SYSTEM_KW < (suggestedMin ?? 0)  ? "undersized"
+    : SYSTEM_KW > (suggestedMax ?? 0) * 1.1 ? "oversized"
+    : "good";
+
   return (
     <div className="pt-16 lg:pt-0 space-y-6 max-w-4xl">
       <div>
@@ -233,6 +247,89 @@ export default function BillsPage() {
           >
             Upload Another
           </button>
+        </div>
+      )}
+
+      {/* ── System Sizing Analysis ── */}
+      {avgMonthlyKwh != null && (
+        <div className="glass-card rounded-2xl p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-emerald-400" />
+            <h2 className="font-semibold" style={{ color: "var(--card-title)" }}>System Sizing Analysis</h2>
+            <span className="text-xs ml-auto" style={{ color: "var(--card-sub)" }}>
+              Based on {billsWithConsumption.length} bill{billsWithConsumption.length !== 1 ? "s" : ""} · DHBVN formula
+            </span>
+          </div>
+
+          {/* Numbers row */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: "Avg Monthly Use",   value: `${avgMonthlyKwh.toFixed(0)} kWh`,          sub: "from your bills",          color: "text-blue-400" },
+              { label: "Min Required",       value: `${requiredKw!.toFixed(2)} kW`,              sub: "monthly units ÷ 120",      color: "text-amber-400" },
+              { label: "Suggested Range",    value: `${suggestedMin!.toFixed(1)}–${suggestedMax!.toFixed(1)} kW`, sub: "+10% to +20% buffer", color: "text-purple-400" },
+              { label: "Your System",        value: `${SYSTEM_KW} kW`,                           sub: "installed capacity",       color: "text-emerald-400" },
+            ].map(({ label, value, sub, color }) => (
+              <div key={label} className="rounded-xl p-3" style={{ background: "var(--bg-surface-2)" }}>
+                <div className={`text-lg font-bold ${color}`}>{value}</div>
+                <div className="text-xs font-medium mt-0.5" style={{ color: "var(--card-label)" }}>{label}</div>
+                <div className="text-xs mt-0.5" style={{ color: "var(--card-sub)" }}>{sub}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Visual bar */}
+          <div className="space-y-1.5">
+            <div className="text-xs" style={{ color: "var(--card-sub)" }}>
+              Scale: 0 – {(Math.max(SYSTEM_KW, suggestedMax ?? 0) * 1.3).toFixed(1)} kW
+            </div>
+            {(() => {
+              const maxScale = Math.max(SYSTEM_KW, suggestedMax ?? 0) * 1.3;
+              const reqPct   = ((requiredKw  ?? 0) / maxScale * 100).toFixed(1);
+              const minPct   = ((suggestedMin ?? 0) / maxScale * 100).toFixed(1);
+              const maxPct   = ((suggestedMax ?? 0) / maxScale * 100).toFixed(1);
+              const sysPct   = (SYSTEM_KW / maxScale * 100).toFixed(1);
+              return (
+                <div className="relative h-8 rounded-lg overflow-hidden" style={{ background: "var(--bg-surface-2)" }}>
+                  {/* Suggested range band */}
+                  <div className="absolute top-0 bottom-0 bg-emerald-500/20 border-l border-r border-emerald-500/40"
+                    style={{ left: `${minPct}%`, width: `${(parseFloat(maxPct) - parseFloat(minPct)).toFixed(1)}%` }} />
+                  {/* Required kW marker */}
+                  <div className="absolute top-1 bottom-1 w-0.5 bg-amber-400" style={{ left: `${reqPct}%` }} />
+                  {/* Your system marker */}
+                  <div className="absolute top-0 bottom-0 w-1 rounded bg-emerald-400" style={{ left: `calc(${sysPct}% - 2px)` }} />
+                  {/* Labels */}
+                  <div className="absolute inset-0 flex items-center px-3 gap-4 text-xs pointer-events-none">
+                    <span className="text-amber-400 font-medium">▲ Required: {requiredKw!.toFixed(2)} kW</span>
+                    <span className="text-emerald-500/70 font-medium">▓ Suggested: {suggestedMin!.toFixed(1)}–{suggestedMax!.toFixed(1)} kW</span>
+                    <span className="text-emerald-400 font-medium">▌ Yours: {SYSTEM_KW} kW</span>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Verdict */}
+          <div className={`flex items-start gap-3 rounded-xl p-3 border ${
+            sizingVerdict === "good"       ? "border-emerald-500/25 bg-emerald-500/5"  :
+            sizingVerdict === "undersized" ? "border-amber-500/25 bg-amber-500/5"     :
+                                             "border-blue-500/25 bg-blue-500/5"
+          }`}>
+            <span className="text-xl leading-none">
+              {sizingVerdict === "good" ? "✅" : sizingVerdict === "undersized" ? "⚠️" : "ℹ️"}
+            </span>
+            <div>
+              <p className="text-sm font-semibold" style={{ color: "var(--card-value)" }}>
+                {sizingVerdict === "good"       && `Your ${SYSTEM_KW} kW system is well-matched to your consumption.`}
+                {sizingVerdict === "undersized" && `Your ${SYSTEM_KW} kW system may be undersized for your consumption.`}
+                {sizingVerdict === "oversized"  && `Your ${SYSTEM_KW} kW system has comfortable headroom above your needs.`}
+              </p>
+              <p className="text-xs mt-1" style={{ color: "var(--card-sub)" }}>
+                {sizingVerdict === "good"       && `Falls within the recommended ${suggestedMin!.toFixed(1)}–${suggestedMax!.toFixed(1)} kW range. You have a healthy buffer for future load growth.`}
+                {sizingVerdict === "undersized" && `Average consumption of ${avgMonthlyKwh.toFixed(0)} kWh/month needs at least ${requiredKw!.toFixed(1)} kW. Consider adding panels if roof space allows.`}
+                {sizingVerdict === "oversized"  && `Your system can comfortably cover your ${avgMonthlyKwh.toFixed(0)} kWh/month average and handle future load additions like an EV or AC.`}
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
