@@ -1,6 +1,9 @@
 """
-Tomorrow's production forecast using Open-Meteo 3-day hourly data.
-Uses the same temperature-corrected STC formula as the collector.
+3-day production forecast.
+Irradiance source priority:
+  1. Solcast half-hourly forecasts (satellite-based, best for Indo-Gangetic haze)
+  2. Open-Meteo global_tilted_irradiance (ERA5 reanalysis, good but misses fog)
+Open-Meteo always fetched for temperature, cloud cover, sunrise/sunset, UV, rain.
 """
 from fastapi import APIRouter, HTTPException
 from typing import Dict, Any
@@ -8,6 +11,7 @@ import httpx
 from datetime import datetime, date, timedelta, timezone
 from config import settings
 from cal_utils import calibration_factor
+import solcast
 
 router = APIRouter(prefix="/api/forecast", tags=["Forecast"])
 
@@ -15,34 +19,50 @@ LAT        = float(settings.latitude)
 LON        = float(settings.longitude)
 CAPACITY_W = settings.installed_capacity_w
 
-# Panel geometry — 5.2° tilt, south-facing (measured on-site)
 PANEL_TILT    = 5
 PANEL_AZIMUTH = 0
 
-# Vikram HyperSol N-type bifacial constants (matches collector)
-PR                 = 0.83     # system PR for new N-type bifacial (wiring+inverter+mismatch)
-TEMP_COEFF         = -0.0030  # γ (Pmax): -0.30%/°C — Vikram HyperSol N-type datasheet
-NOCT               = 45.0     # °C (IEC standard)
-BIFACIAL_REAR_GAIN = 0.09     # 9% rear irradiance at 5° tilt on concrete roof
+PR                 = 0.83
+TEMP_COEFF         = -0.0030
+NOCT               = 45.0
+BIFACIAL_REAR_GAIN = 0.09
+
+_IST = timezone(timedelta(hours=5, minutes=30))
 
 
 def _expected_power(poa_wm2: float, temp_c: float, month: int) -> float:
-    """
-    Temperature-corrected STC formula — matches collector logic exactly.
-    Uses POA (plane-of-array) irradiance and IEC NOCT cell temperature model.
-    Applies monthly irradiance calibration factor from irradiance_cal.json.
-    """
     T_cell = temp_c + (NOCT - 20.0) * (poa_wm2 / 800.0)
     correction = 1 + TEMP_COEFF * (T_cell - 25.0)
     cal = calibration_factor(month)
     return max(0.0, (poa_wm2 / 1000.0) * CAPACITY_W * (1 + BIFACIAL_REAR_GAIN) * PR * correction * cal)
 
 
+def _build_sc_gti_map(sc_data: list[dict]) -> dict[str, float]:
+    """
+    Convert Solcast half-hourly forecast periods to IST-hour → avg GTI map.
+    period_end is UTC; we attribute each 30-min block to the IST hour it starts in.
+    Returns {"2025-05-16T14:00": 650.3, ...}
+    """
+    buckets: dict[str, list[float]] = {}
+    for p in sc_data:
+        try:
+            pe_utc = datetime.fromisoformat(p["period_end"])
+            if pe_utc.tzinfo is None:
+                pe_utc = pe_utc.replace(tzinfo=timezone.utc)
+            # period_end is the end; start = end - 30 min
+            ps_ist = (pe_utc - timedelta(minutes=30)).astimezone(_IST)
+            hour_key = ps_ist.strftime("%Y-%m-%dT%H:00")
+            buckets.setdefault(hour_key, []).append(float(p.get("gti_wm2") or 0))
+        except Exception:
+            pass
+    return {k: sum(v) / len(v) for k, v in buckets.items()}
+
+
 @router.get("")
 async def get_forecast() -> Dict[str, Any]:
     """
     Returns hourly production forecast for today + next 2 days.
-    Uses global_tilted_irradiance (POA at 5°/south) from Open-Meteo.
+    Uses Solcast GTI (satellite) as primary, Open-Meteo global_tilted_irradiance as fallback.
     """
     url = (
         f"https://api.open-meteo.com/v1/forecast"
@@ -67,21 +87,33 @@ async def get_forecast() -> Dict[str, Any]:
     times  = hourly.get("time", [])
     temps  = hourly.get("temperature_2m", [])
     clouds = hourly.get("cloud_cover", [])
-    poa    = hourly.get("global_tilted_irradiance", [])
+    om_poa = hourly.get("global_tilted_irradiance", [])
+
+    # Solcast hourly GTI map (primary irradiance)
+    sc_data = solcast.get_forecast()
+    sc_gti  = _build_sc_gti_map(sc_data) if sc_data else {}
 
     hourly_forecast = []
     for i, t in enumerate(times):
-        irr_poa = (poa[i] or 0) if i < len(poa) else 0
-        temp_c  = (temps[i] or 30.0) if i < len(temps) else 30.0
-        # Extract month from timestamp string "YYYY-MM-DDTHH:MM" for calibration
+        # Irradiance: Solcast preferred per hour, Open-Meteo fallback
+        if t in sc_gti:
+            irr_poa = sc_gti[t]
+            hour_src = "solcast"
+        else:
+            irr_poa = (om_poa[i] or 0) if i < len(om_poa) else 0
+            hour_src = "open-meteo"
+
+        temp_c     = (temps[i] or 30.0) if i < len(temps) else 30.0
         slot_month = int(t[5:7]) if len(t) >= 7 else date.today().month
-        power   = round(_expected_power(irr_poa, temp_c, slot_month))
+        power      = round(_expected_power(irr_poa, temp_c, slot_month))
+
         hourly_forecast.append({
             "time":             t,
             "expected_power_w": power,
             "irradiance_wm2":   round(irr_poa),
             "temperature_c":    temp_c,
             "cloud_cover_pct":  (clouds[i] or 0) if i < len(clouds) else 0,
+            "irradiance_source": hour_src,
         })
 
     daily_summaries = []
@@ -95,13 +127,12 @@ async def get_forecast() -> Dict[str, Any]:
         day_date  = today + timedelta(days=d_idx)
         day_str   = day_date.isoformat()
         day_hours = [h for h in hourly_forecast if h["time"].startswith(day_str)]
-        # kWh = sum of hourly power (W) × interval (1h) / 1000; Open-Meteo is 1-hour slots
         interval_hours = 1.0
-        kwh       = round(sum(h["expected_power_w"] * interval_hours for h in day_hours) / 1000, 2)
-        savings   = round(kwh * settings.electricity_tariff_inr, 1)
-        label     = ["Today", "Tomorrow", day_date.strftime("%A")][d_idx]
+        kwh     = round(sum(h["expected_power_w"] * interval_hours for h in day_hours) / 1000, 2)
+        savings = round(kwh * settings.electricity_tariff_inr, 1)
+        label   = ["Today", "Tomorrow", day_date.strftime("%A")][d_idx]
 
-        avg_cloud  = (
+        avg_cloud = (
             sum(h["cloud_cover_pct"] for h in day_hours) / len(day_hours)
             if day_hours else 50
         )
@@ -117,23 +148,33 @@ async def get_forecast() -> Dict[str, Any]:
         else:
             confidence = 30
 
+        # Solcast data coverage for this day
+        sc_hours = sum(1 for h in day_hours if h["irradiance_source"] == "solcast")
+        day_src  = "solcast" if sc_hours > len(day_hours) // 2 else "open-meteo"
+
         daily_summaries.append({
-            "date":             day_str,
-            "label":            label,
-            "expected_kwh":     kwh,
-            "savings_inr":      savings,
-            "avg_cloud_pct":    round(avg_cloud),
-            "confidence_pct":   confidence,
-            "sunrise":          sunrises[d_idx] if d_idx < len(sunrises) else None,
-            "sunset":           sunsets[d_idx]  if d_idx < len(sunsets)  else None,
-            "uv_index_max":     uv_max[d_idx]   if d_idx < len(uv_max)   else None,
-            "precipitation_mm": rain[d_idx]      if d_idx < len(rain)    else 0,
+            "date":              day_str,
+            "label":             label,
+            "expected_kwh":      kwh,
+            "savings_inr":       savings,
+            "avg_cloud_pct":     round(avg_cloud),
+            "confidence_pct":    confidence,
+            "irradiance_source": day_src,
+            "sunrise":           sunrises[d_idx] if d_idx < len(sunrises) else None,
+            "sunset":            sunsets[d_idx]  if d_idx < len(sunsets)  else None,
+            "uv_index_max":      uv_max[d_idx]   if d_idx < len(uv_max)   else None,
+            "precipitation_mm":  rain[d_idx]     if d_idx < len(rain)     else 0,
         })
 
+    sc_hours_total = sum(1 for h in hourly_forecast if h["irradiance_source"] == "solcast")
+    primary_source = "solcast" if sc_hours_total > 0 else "open-meteo"
+
     return {
-        "status":            "success",
-        "system_capacity_w": CAPACITY_W,
-        "performance_ratio": PR,
-        "daily_summaries":   daily_summaries,
-        "hourly_forecast":   hourly_forecast,
+        "status":              "success",
+        "irradiance_source":   primary_source,
+        "solcast_calls_today": solcast.call_status(),
+        "system_capacity_w":   CAPACITY_W,
+        "performance_ratio":   PR,
+        "daily_summaries":     daily_summaries,
+        "hourly_forecast":     hourly_forecast,
     }
