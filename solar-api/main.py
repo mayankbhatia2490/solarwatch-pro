@@ -88,6 +88,7 @@ app.include_router(export.router)
 app.include_router(analysis.router)
 app.include_router(ai_insight.router)
 app.include_router(bills.router)
+app.include_router(calibrate.router)
 
 @app.get("/health")
 async def health():
