@@ -88,36 +88,37 @@ async def _call_gemini_with_pdf(pdf_bytes: bytes) -> dict:
             }],
             "generationConfig": {
                 "temperature": 0.1,
-                "maxOutputTokens": 1024,
+                "maxOutputTokens": 4096,  # 1024 truncated the JSON response
             },
         }
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 resp = await client.post(url, json=payload)
                 if resp.status_code == 404:
                     last_error = f"Model {model} not found"
                     continue
                 if resp.status_code == 400:
-                    # Model may not support inline PDF — try next
                     last_error = f"Model {model} rejected request: {resp.text[:200]}"
                     continue
                 resp.raise_for_status()
                 data = resp.json()
                 raw = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-                # Strip markdown fences
+                # Strip markdown fences if present
                 if raw.startswith("```"):
-                    parts = raw.split("```")
-                    raw = parts[1] if len(parts) > 1 else raw
+                    raw = raw.split("```")[1]
                     if raw.startswith("json"):
                         raw = raw[4:]
-                return json.loads(raw.strip())
+                raw = raw.strip()
+                # Guard: if still truncated, try to close the JSON object
+                if not raw.endswith("}"):
+                    raw = raw.rsplit(",", 1)[0] + "\n}"
+                return json.loads(raw)
         except json.JSONDecodeError as e:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Gemini returned non-JSON response — try uploading again. ({e})"
-            )
+            last_error = f"JSON parse error ({e})"
+            continue   # try next model rather than giving up immediately
         except (KeyError, IndexError):
-            raise HTTPException(status_code=422, detail="Gemini response was empty or malformed")
+            last_error = "Gemini response was empty or malformed"
+            continue
         except httpx.HTTPStatusError as e:
             last_error = f"HTTP {e.response.status_code}: {e.response.text[:200]}"
             continue
@@ -125,7 +126,7 @@ async def _call_gemini_with_pdf(pdf_bytes: bytes) -> dict:
             last_error = str(e)
             continue
 
-    raise HTTPException(status_code=503, detail=f"Gemini unavailable: {last_error}")
+    raise HTTPException(status_code=503, detail=f"All Gemini models failed. Last error: {last_error}")
 
 
 @router.post("/upload")
