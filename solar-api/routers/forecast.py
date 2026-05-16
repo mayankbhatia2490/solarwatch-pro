@@ -8,6 +8,7 @@ Open-Meteo always fetched for temperature, cloud cover, sunrise/sunset, UV, rain
 from fastapi import APIRouter, HTTPException
 from typing import Dict, Any
 import httpx
+import math
 from datetime import datetime, date, timedelta, timezone
 from config import settings
 from cal_utils import calibration_factor
@@ -30,11 +31,19 @@ BIFACIAL_REAR_GAIN = 0.09
 _IST = timezone(timedelta(hours=5, minutes=30))
 
 
+def _low_irr_factor(poa_wm2: float) -> float:
+    """Inverter partial-load efficiency correction (IEA PVPS Task 13)."""
+    if poa_wm2 <= 0:
+        return 1.0
+    return max(0.75, 1.0 + 0.05 * math.log10(poa_wm2 / 1000.0))
+
+
 def _expected_power(poa_wm2: float, temp_c: float, month: int) -> float:
     T_cell = temp_c + (NOCT - 20.0) * (poa_wm2 / 800.0)
     correction = 1 + TEMP_COEFF * (T_cell - 25.0)
     cal = calibration_factor(month)
-    return max(0.0, (poa_wm2 / 1000.0) * CAPACITY_W * (1 + BIFACIAL_REAR_GAIN) * PR * correction * cal)
+    pr_eff = PR * _low_irr_factor(poa_wm2)
+    return max(0.0, (poa_wm2 / 1000.0) * CAPACITY_W * (1 + BIFACIAL_REAR_GAIN) * pr_eff * correction * cal)
 
 
 def _build_sc_gti_map(sc_data: list[dict]) -> dict[str, float]:

@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from typing import Dict, Any
 import httpx
+import math
 from datetime import datetime, timezone
 from config import settings
 from influx import query
@@ -22,14 +23,19 @@ NOCT               = 45.0      # °C (IEC standard)
 
 
 def _get_live_power() -> float:
+    """15-minute mean of non-zero power readings — smooths Shinemonitor's noisy real-time field."""
     flux = f'''
 from(bucket: "{settings.influxdb_bucket}")
-  |> range(start: -2h)
+  |> range(start: -15m)
   |> filter(fn: (r) => r["_field"] == "power_now_w")
-  |> last()
+  |> filter(fn: (r) => r["_value"] > 0)
+  |> sort(columns: ["_time"])
 '''
     recs = query(flux)
-    return float(recs[0].get_value()) if recs else 0.0
+    if not recs:
+        return 0.0
+    vals = [float(r.get_value()) for r in recs]
+    return sum(vals) / len(vals)
 
 
 def _get_live_temp() -> float | None:
@@ -44,12 +50,24 @@ from(bucket: "{settings.influxdb_bucket}")
     return float(recs[0].get_value()) if recs else None
 
 
+def _low_irr_factor(poa_wm2: float) -> float:
+    """
+    Inverter partial-load efficiency correction at low irradiance.
+    String inverters lose ~5% per log10 decade below 1000 W/m² (IEA PVPS Task 13).
+    Clamped to [0.75, 1.0] — even at very low light, we don't go below 75% of nominal PR.
+    """
+    if poa_wm2 <= 0:
+        return 1.0
+    return max(0.75, 1.0 + 0.05 * math.log10(poa_wm2 / 1000.0))
+
+
 def _expected_power(poa_wm2: float, temp_c: float, month: int) -> int:
-    """NOCT temperature-corrected expected power with calibration factor."""
-    T_cell     = temp_c + (NOCT - 20.0) * (poa_wm2 / 800.0)
-    t_corr     = 1 + TEMP_COEFF * (T_cell - 25.0)
-    cal        = calibration_factor(month)
-    return round((poa_wm2 / 1000.0) * CAPACITY_W * (1 + BIFACIAL_REAR_GAIN) * PERFORMANCE_RATIO * t_corr * cal)
+    """NOCT + temperature + low-irradiance-corrected expected power with calibration factor."""
+    T_cell   = temp_c + (NOCT - 20.0) * (poa_wm2 / 800.0)
+    t_corr   = 1 + TEMP_COEFF * (T_cell - 25.0)
+    cal      = calibration_factor(month)
+    pr_eff   = PERFORMANCE_RATIO * _low_irr_factor(poa_wm2)
+    return round((poa_wm2 / 1000.0) * CAPACITY_W * (1 + BIFACIAL_REAR_GAIN) * pr_eff * t_corr * cal)
 
 
 @router.get("")
@@ -60,7 +78,8 @@ async def get_weather() -> Dict[str, Any]:
       1. Solcast estimated_actuals (satellite-based, best for Indo-Gangetic haze)
       2. Open-Meteo global_tilted_irradiance (ERA5 reanalysis, good but misses fog)
     Open-Meteo still provides temperature, humidity, wind, rain.
-    Expected power uses NOCT temperature correction + monthly calibration factor.
+    Expected power uses NOCT + temperature correction + low-irradiance PR correction + monthly cal.
+    Actual power is the 15-minute mean of non-zero inverter readings.
     """
     current_month = datetime.now(timezone.utc).month
     actual_power_w = round(_get_live_power())
@@ -115,16 +134,15 @@ async def get_weather() -> Dict[str, Any]:
         poa_irradiance    = None
         irradiance_source = "unavailable"
 
-    # ── Expected power (only computed when real irradiance is available) ───────
+    # ── Expected power ────────────────────────────────────────────────────────
     temp_c = om_current.get("temperature_2m") or _get_live_temp() or 35.0
     if poa_irradiance is not None and poa_irradiance > 0:
         expected_power_w = _expected_power(poa_irradiance, temp_c, current_month)
-        # Only meaningful above ~15% of capacity — below that, inverter
-        # partial-load losses dominate and large gaps are normal.
-        _gap_threshold_w = CAPACITY_W * 0.15
+        # Gap only shown above 15% capacity — below that the low-irradiance
+        # correction is approximate and results are not actionable.
         efficiency_drop_pct = (
             round(max(0, (expected_power_w - actual_power_w) / expected_power_w * 100), 1)
-            if expected_power_w > _gap_threshold_w else None
+            if expected_power_w > CAPACITY_W * 0.15 else None
         )
     else:
         expected_power_w    = None
@@ -171,7 +189,7 @@ async def get_weather() -> Dict[str, Any]:
                 "expected_power_w":    expected_power_w,
                 "actual_power_w":      actual_power_w,
                 "efficiency_drop_pct": efficiency_drop_pct,
-                "performance_ratio_used": PERFORMANCE_RATIO,
+                "performance_ratio_used": round(PERFORMANCE_RATIO * _low_irr_factor(poa_irradiance or 1000), 3),
                 "system_capacity_w":   CAPACITY_W,
                 "irradiance_source":   irradiance_source,
             },
