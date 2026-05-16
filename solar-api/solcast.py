@@ -11,8 +11,8 @@ from pathlib import Path
 _API_KEY   = os.environ.get("SOLCAST_API_KEY", "")
 _LAT       = float(os.environ.get("LATITUDE",  "29.6934"))
 _LON       = float(os.environ.get("LONGITUDE", "76.9994"))
-_TILT      = 5   # panel tilt degrees (south-facing)
-_AZIMUTH   = 0   # Solcast convention: 0 = south
+_TILT      = 5    # panel tilt degrees
+_AZIMUTH   = 180  # Solcast API: 0=North clockwise → 180=South (panels face south in Karnal)
 
 _CACHE_FILE        = Path("/app/data/solcast_cache.json")
 _MAX_CALLS_PER_DAY = 45   # 5-call safety buffer from the 50 limit
