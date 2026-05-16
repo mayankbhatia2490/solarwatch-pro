@@ -317,6 +317,10 @@ from(bucket: "{BUCKET}")
     _IST = timezone(timedelta(hours=5, minutes=30))
     chart_data = []
 
+    # Debug: log first few records to diagnose power_w=0 issue
+    for i, r in enumerate(recs[:3]):
+        print(f"[chart-debug] rec[{i}] keys={list(r.values.keys())} power_now_w={r.values.get('power_now_w')} _value={r.values.get('_value')}", flush=True)
+
     for r in recs:
         ts      = r.get_time()
         vals    = r.values
