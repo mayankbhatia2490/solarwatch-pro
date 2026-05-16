@@ -77,7 +77,11 @@ export default function BillsPage() {
     fd.append("file", file);
     try {
       const res = await fetch(`${API}/api/bills/upload`, { method: "POST", body: fd });
-      const json = await res.json();
+      if (res.status === 413) throw new Error("File too large — nginx limit exceeded (check server config)");
+      const text = await res.text();
+      let json: any;
+      try { json = JSON.parse(text); }
+      catch { throw new Error(`Server error (${res.status}) — not JSON. Check API logs.`); }
       if (!res.ok) throw new Error(json.detail ?? "Upload failed");
       setParsed(json.parsed);
       setFilename(json.filename);
