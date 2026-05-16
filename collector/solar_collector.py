@@ -53,10 +53,6 @@ EMAIL_TO      = os.environ.get('EMAIL_TO')
 INSTALLED_CAPACITY_W  = float(os.environ.get('INSTALLED_CAPACITY_W', '3570'))  # 6 × 595W STC
 ELECTRICITY_TARIFF_INR = float(os.environ.get('ELECTRICITY_TARIFF_INR', '6.32'))
 
-# Shinemonitor over-reports vs UHBVN physical meter (KWHS).
-# Derived from May-2026 bill: UHBVN 437 kWh ÷ Shinemonitor 485.4 kWh = 0.900.
-# Applied at write time so stored values match utility-meter scale.
-SHINEMONITOR_CORRECTION = float(os.environ.get('SHINEMONITOR_CORRECTION', '0.900'))
 
 # Vikram Solar HyperSol VSMDH.72.595.05 — N-type bifacial, M10 half-cut, 144 cells
 # Source: Vikram Solar datasheet VSL/ENG/SC/325-V02/STD
@@ -473,9 +469,9 @@ def job():
         point = (
             Point("solar_metrics")
             .tag("site_id", SITE_ID)
-            .field("power_now_w",            float(solar['power_now_w']) * SHINEMONITOR_CORRECTION)
-            .field("daily_energy_kwh",       float(solar['daily_energy_kwh']) * SHINEMONITOR_CORRECTION)
-            .field("total_energy_kwh",       float(solar['total_energy_kwh']) * SHINEMONITOR_CORRECTION)
+            .field("power_now_w",            float(solar['power_now_w']))
+            .field("daily_energy_kwh",       float(solar['daily_energy_kwh']))
+            .field("total_energy_kwh",       float(solar['total_energy_kwh']))
             .field("status_code",            int(solar['status_code']))
             .field("temperature_c",          float(weather['temperature_c']))
             .field("cloud_cover_pct",        float(weather['cloud_cover_pct']))
