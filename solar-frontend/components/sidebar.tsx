@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Sun, Activity, Wrench, Settings, Menu, X, Moon, CalendarDays } from "lucide-react";
+import { Sun, Activity, Wrench, Settings, Menu, X, Moon, CalendarDays, FileText } from "lucide-react";
 import { useState } from "react";
 import { useTheme } from "next-themes";
 
@@ -10,6 +10,7 @@ const nav = [
   { href: "/monitor",   label: "Live Monitor", icon: Activity },
   { href: "/longterm",  label: "Long-term",    icon: CalendarDays },
   { href: "/maintenance", label: "Maintenance", icon: Wrench },
+  { href: "/bills",      label: "Bills",        icon: FileText },
   { href: "/settings",  label: "Settings",     icon: Settings },
 ];
 
