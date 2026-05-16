@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     # ── Gemini AI — daily report analysis (free tier: 15 RPM, 1M tokens/day) ───
     # Get a free key at: https://aistudio.google.com/app/apikey
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"   # update here if Google retires the model
+    gemini_model: str = "gemini-2.5-flash"   # update here if Google retires the model
 
     # ── Solcast — satellite-based irradiance (hobbyist: 50 calls/day) ──────────
     # Set SOLCAST_API_KEY in .env — do NOT commit the key to the repository.

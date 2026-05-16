@@ -89,7 +89,7 @@ services:
       - SITE_ID=${SITE_ID:-default}
       # AI
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.0-flash}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
       # Irradiance — Solcast hobbyist (50 calls/day, satellite-based)
       - SOLCAST_API_KEY=${SOLCAST_API_KEY:-}
       # UHBVN tariff slabs

@@ -55,10 +55,17 @@ async def _call_gemini_with_pdf(pdf_bytes: bytes) -> dict:
 
     b64 = base64.b64encode(pdf_bytes).decode()
 
-    # Try configured model first, then fallbacks
-    models = [settings.gemini_model, "gemini-2.0-flash", "gemini-1.5-flash"]
+    # Try configured model first, then fallbacks in recency order.
+    # gemini-2.5-flash supports native PDF inline_data; older models may not.
+    models = [
+        settings.gemini_model,
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite",
+        "gemini-1.5-pro",
+    ]
     # Deduplicate while preserving order
-    seen = set()
+    seen: set = set()
     models = [m for m in models if m and not (m in seen or seen.add(m))]
 
     last_error = "Gemini API unavailable"
