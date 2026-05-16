@@ -196,14 +196,14 @@ try:
           f"source={resp.get('irradiance_source')}  [{elapsed:.1f}s]")
     check("forecast: hourly_forecast list present",
           len(hourly) > 0, f"{len(hourly)} hours")
-    nz = sum(1 for h in hourly if h.get("expected_w", 0) > 0)
-    check("forecast: non-zero expected_w hours",
-          nz > 0, f"{nz}/{len(hourly)} hours expected_w>0")
+    nz = sum(1 for h in hourly if h.get("expected_power_w", 0) > 0)
+    check("forecast: non-zero expected_power_w hours",
+          nz > 0, f"{nz}/{len(hourly)} hours expected_power_w>0")
 
     if hourly:
-        next_h = next((h for h in hourly if h.get("expected_w", 0) > 0), hourly[0])
+        next_h = next((h for h in hourly if h.get("expected_power_w", 0) > 0), hourly[0])
         print(f"  {INFO} Next non-zero hour: {next_h.get('time','')}  "
-              f"expected={next_h.get('expected_w')}W  "
+              f"expected={next_h.get('expected_power_w')}W  "
               f"source={next_h.get('irradiance_source')}")
 except Exception as e:
     check("forecast endpoint", False, str(e))
