@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """
 SolarWatch Pro — End-to-End Test Suite
-Run from the NAS:
-    docker compose exec solar-api python /app/test_e2e.py
-Or from the NAS host (hits nginx on port 8080):
+Run from the NAS project root directory:
     python3 test_e2e.py --host http://localhost:8080
 """
 import sys, json, time, argparse
@@ -384,9 +382,9 @@ try:
     pts = chart7d.get("data", [])
     if pts:
         all_zero = all(p.get("power_w", 0) == 0 for p in pts)
-        check("data integrity: 7d chart power_w not all-zero",
-              not all_zero,
-              f"{'ALL ZERO — InfluxDB/aggregateWindow issue' if all_zero else f'{sum(1 for p in pts if p[\"power_w\"]>0)}/{len(pts)} non-zero'}")
+        nz = sum(1 for p in pts if p.get("power_w", 0) > 0)
+        detail = "ALL ZERO — InfluxDB sort fix not deployed?" if all_zero else f"{nz}/{len(pts)} non-zero"
+        check("data integrity: 7d chart power_w not all-zero", not all_zero, detail)
     else:
         warn("data integrity: 7d chart returned no points")
 except Exception as e:
