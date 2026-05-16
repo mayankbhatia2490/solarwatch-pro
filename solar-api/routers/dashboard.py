@@ -5,7 +5,7 @@ from datetime import datetime, date, timedelta, timezone
 from typing import Optional
 import httpx
 import asyncio
-from cal_utils import calibration_factor
+from cal_utils import calibration_factor, actual_kwh as _correct
 
 router = APIRouter()
 
@@ -143,8 +143,8 @@ def _is_night(sunrise: Optional[str], sunset: Optional[str]) -> bool:
 async def dashboard_summary():
     """Main dashboard — all KPIs in a single call, including sunrise/sunset for night detection."""
     power = _latest("power_now_w")
-    energy_today = _latest("daily_energy_kwh")
-    total_energy = _latest("total_energy_kwh")
+    energy_today = _correct(_latest("daily_energy_kwh"))
+    total_energy = _correct(_latest("total_energy_kwh"))
     temp = _latest("internal_radiator_temperature")
     cloud = _latest("cloud_cover_pct")
     radiation = _latest("shortwave_radiation_wm2")
@@ -175,7 +175,7 @@ from(bucket: "{BUCKET}")
   |> sum()
 '''
     month_recs = query(flux_month)
-    energy_month = float(month_recs[0].get_value()) if month_recs else 0.0
+    energy_month = _correct(float(month_recs[0].get_value()) if month_recs else 0.0)
 
     # Payback calculation
     install_date = datetime.fromisoformat(settings.installation_date)

@@ -29,3 +29,16 @@ def calibration_meta() -> dict:
         }
     except (FileNotFoundError, json.JSONDecodeError):
         return {"winner": None, "calibrated_at": None}
+
+
+# ── Shinemonitor meter bias correction ───────────────────────────────────────
+# Shinemonitor reports inverter AC output; UHBVN physical meter (KWHS) reads
+# at the metering point and uses utility-grade calibration.
+# Derived from May-2026 bill: UHBVN 437 kWh ÷ Shinemonitor 485.4 kWh = 0.900.
+# Applied to daily_energy_kwh at READ time so all historical data is corrected
+# without touching the raw InfluxDB values.
+# Override via SHINEMONITOR_CORRECTION env var when new bills give a better estimate.
+def actual_kwh(raw_shinemonitor_kwh: float) -> float:
+    """Convert Shinemonitor-reported kWh to utility-meter-equivalent kWh."""
+    from config import settings
+    return raw_shinemonitor_kwh * settings.shinemonitor_correction

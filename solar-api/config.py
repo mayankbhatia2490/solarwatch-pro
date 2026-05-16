@@ -40,6 +40,13 @@ class Settings(BaseSettings):
     tariff_electricity_duty_pct: float = 5.0        # % of energy charges (confirmed May-2026 bill)
     tariff_meter_rent_inr: float = 0.0              # MMC = ₹0 for this connection (bill verified May-2026)
 
+    # ── Shinemonitor meter bias correction ───────────────────────────────────────
+    # Shinemonitor inverter counter over-reads UHBVN physical KWHS meter.
+    # Derived: UHBVN bill 437 kWh ÷ Shinemonitor 485.4 kWh (Apr–May 2026) = 0.900.
+    # Applied at both write time (collector) and read time (API historical data).
+    # Recalibrate each time a new bill arrives using: bill_kwhs / app_total.
+    shinemonitor_correction: float = 0.900
+
     # ── Consumption baseline — used for UHBVN bill savings calculation ──────────
     # Set to your actual monthly grid consumption from your electricity bill.
     monthly_consumption_kwh: float = 687.0   # actual: import(442) + self-consumed solar(245) — May-2026 bill

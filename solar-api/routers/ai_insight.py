@@ -12,7 +12,7 @@ import httpx
 
 from influx import query
 from config import settings
-from cal_utils import calibration_factor
+from cal_utils import calibration_factor, actual_kwh as _correct
 
 router = APIRouter(prefix="/api/ai", tags=["AI Insight"])
 
@@ -119,7 +119,7 @@ def _build_context(days: int) -> dict:
         date_str = ist.strftime("%Y-%m-%d")
         ts_key   = ist.strftime("%Y-%m-%dT%H:%M")
         h        = ist.hour
-        actual   = float(r.get_value() or 0)
+        actual   = _correct(float(r.get_value() or 0))
         expected = exp_by_ts.get(ts_key, 0)
         temp     = tmp_by_ts.get(ts_key, 0)
 

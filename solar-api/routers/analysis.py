@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 from typing import Dict, Any
 from datetime import datetime, timezone, timedelta, date
 from collections import defaultdict
+from cal_utils import actual_kwh as _correct
 import httpx
 import asyncio
 
@@ -132,7 +133,7 @@ from(bucket: "{BUCKET}")
     daily_actual: dict[str, float] = {}
     for r in actual_recs:
         ist_date = (r.get_time() + timedelta(hours=5, minutes=30)).strftime("%Y-%m-%d")
-        val = float(r.get_value() or 0)
+        val = _correct(float(r.get_value() or 0))
         if val > 0:
             daily_actual[ist_date] = val
 
