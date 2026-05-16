@@ -294,17 +294,20 @@ async def daily_chart(
 
     # ── Build Flux queries ────────────────────────────────────────────────────
     # aggregateWindow() and pivot() both return empty on this InfluxDB version.
-    # Fetch raw sorted data for each field separately; aggregate in Python.
+    # Filter out zero values — inverter writes 0 at night; chart only needs
+    # real generation data. sort() is the only Flux transform that works here.
     flux_power = f'''
 from(bucket: "{BUCKET}")
   {stop_clause}
   |> filter(fn: (r) => r["_field"] == "power_now_w")
+  |> filter(fn: (r) => r["_value"] > 0)
   |> sort(columns: ["_time"])
 '''
     flux_expected = f'''
 from(bucket: "{BUCKET}")
   {stop_clause}
   |> filter(fn: (r) => r["_field"] == "expected_power_w")
+  |> filter(fn: (r) => r["_value"] > 0)
   |> sort(columns: ["_time"])
 '''
 
