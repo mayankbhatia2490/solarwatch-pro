@@ -292,46 +292,54 @@ async def daily_chart(
 
     stop_clause = f"|> range(start: {start}, stop: {stop})" if stop != "now()" else f"|> range(start: {start})"
 
-    # ── Fetch chart data from InfluxDB + Open-Meteo (concurrent) ────────────
-    # Always pivot both fields — pivot correctly populates vals["power_now_w"]
-    # even when expected_power_w is null for a window.
-    # For multi-day we replace expected_w with Open-Meteo bell curves.
-    flux_chart = f'''
+    # ── Build Flux queries ────────────────────────────────────────────────────
+    # Never use pivot() — it returns empty results on this InfluxDB version.
+    # Two separate single-field queries; r.get_value() reads _value correctly.
+    flux_power = f'''
 from(bucket: "{BUCKET}")
   {stop_clause}
-  |> filter(fn: (r) => r["_field"] == "power_now_w" or r["_field"] == "expected_power_w")
+  |> filter(fn: (r) => r["_field"] == "power_now_w")
   |> aggregateWindow(every: {window}, fn: mean, createEmpty: false)
-  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
 '''
+    flux_expected = f'''
+from(bucket: "{BUCKET}")
+  {stop_clause}
+  |> filter(fn: (r) => r["_field"] == "expected_power_w")
+  |> aggregateWindow(every: {window}, fn: mean, createEmpty: false)
+'''
+
     loop = asyncio.get_running_loop()
     if multi_day:
-        recs, om_map = await asyncio.gather(
-            loop.run_in_executor(None, lambda: query(flux_chart)),
+        # Expected comes from Open-Meteo — only need power from InfluxDB.
+        power_recs, om_map = await asyncio.gather(
+            loop.run_in_executor(None, lambda: query(flux_power)),
             _om_expected_map(past_days),
         )
+        exp_recs = []
     else:
-        recs   = await loop.run_in_executor(None, lambda: query(flux_chart))
+        power_recs, exp_recs = await asyncio.gather(
+            loop.run_in_executor(None, lambda: query(flux_power)),
+            loop.run_in_executor(None, lambda: query(flux_expected)),
+        )
         om_map = {}
 
     # ── Build chart data ──────────────────────────────────────────────────────
     _IST = timezone(timedelta(hours=5, minutes=30))
+
+    # Build expected lookup by timestamp (for short-range InfluxDB path)
+    exp_by_ts: dict = {r.get_time(): round(float(r.get_value() or 0), 1) for r in exp_recs}
+
     chart_data = []
-
-    # Debug: log first few records to diagnose power_w=0 issue
-    for i, r in enumerate(recs[:3]):
-        print(f"[chart-debug] rec[{i}] keys={list(r.values.keys())} power_now_w={r.values.get('power_now_w')} _value={r.values.get('_value')}", flush=True)
-
-    for r in recs:
+    for r in power_recs:
         ts      = r.get_time()
-        vals    = r.values
-        power_w = round(float(vals.get("power_now_w") or 0), 1)
+        power_w = round(float(r.get_value() or 0), 1)
 
         if om_map:
             ist_dt     = ts.astimezone(_IST)
             hour_key   = ist_dt.strftime("%Y-%m-%dT%H:00")
             expected_w = om_map.get(hour_key, 0.0)
         else:
-            expected_w = round(float(vals.get("expected_power_w") or 0), 1)
+            expected_w = exp_by_ts.get(ts, 0.0)
 
         chart_data.append({
             "time":       ts.isoformat(),
