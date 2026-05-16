@@ -293,19 +293,19 @@ async def daily_chart(
     stop_clause = f"|> range(start: {start}, stop: {stop})" if stop != "now()" else f"|> range(start: {start})"
 
     # ── Build Flux queries ────────────────────────────────────────────────────
-    # Never use pivot() — it returns empty results on this InfluxDB version.
-    # Two separate single-field queries; r.get_value() reads _value correctly.
+    # aggregateWindow() and pivot() both return empty on this InfluxDB version.
+    # Fetch raw sorted data for each field separately; aggregate in Python.
     flux_power = f'''
 from(bucket: "{BUCKET}")
   {stop_clause}
   |> filter(fn: (r) => r["_field"] == "power_now_w")
-  |> aggregateWindow(every: {window}, fn: mean, createEmpty: false)
+  |> sort(columns: ["_time"])
 '''
     flux_expected = f'''
 from(bucket: "{BUCKET}")
   {stop_clause}
   |> filter(fn: (r) => r["_field"] == "expected_power_w")
-  |> aggregateWindow(every: {window}, fn: mean, createEmpty: false)
+  |> sort(columns: ["_time"])
 '''
 
     loop = asyncio.get_running_loop()

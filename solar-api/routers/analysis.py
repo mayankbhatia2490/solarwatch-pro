@@ -152,18 +152,23 @@ from(bucket: "{BUCKET}")
         daily_expected[ist_date] += expected  # Wh (1-hour slots)
 
     # ── 3. Inverter temperature from InfluxDB (for hot-hour detection) ────────
+    # aggregateWindow returns empty on this InfluxDB version; use sort + Python dedup.
     flux_temp = f'''
 from(bucket: "{BUCKET}")
   |> range(start: -{days}d)
   |> filter(fn: (r) => r["_field"] == "internal_radiator_temperature")
   |> filter(fn: (r) => r["_value"] > {TEMP_WARN})
-  |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
+  |> sort(columns: ["_time"])
 '''
     temp_recs = query(flux_temp)
     hot_hours_by_day: dict[str, int] = defaultdict(int)
+    _seen_hot_hours: set[str] = set()
     for r in temp_recs:
-        ist_date = (r.get_time() + timedelta(hours=5, minutes=30)).strftime("%Y-%m-%d")
-        hot_hours_by_day[ist_date] += 1
+        ist_dt   = r.get_time() + timedelta(hours=5, minutes=30)
+        hour_key = ist_dt.strftime("%Y-%m-%d:%H")
+        if hour_key not in _seen_hot_hours:
+            _seen_hot_hours.add(hour_key)
+            hot_hours_by_day[ist_dt.strftime("%Y-%m-%d")] += 1
 
     # ── 4. Build daily bars ───────────────────────────────────────────────────
     all_dates = sorted(set(daily_actual.keys()) | set(daily_expected.keys()))
@@ -194,25 +199,38 @@ from(bucket: "{BUCKET}")
             pr_trend.append({"date": window[-1]["date"], "pr_7d": pr_7d})
 
     # ── 6. Hour-of-day efficiency profile (power_now_w vs expected) ───────────
-    # For the hourly profile we still use InfluxDB power_now_w since we want
-    # real measured power, and gaps self-correct when averaged over many days.
-    flux_hourly = f'''
+    # aggregateWindow+pivot both return empty; use two separate sort queries.
+    flux_pwr_h = f'''
 from(bucket: "{BUCKET}")
   |> range(start: -{days}d)
-  |> filter(fn: (r) =>
-      r["_field"] == "power_now_w" or
-      r["_field"] == "expected_power_w")
+  |> filter(fn: (r) => r["_field"] == "power_now_w")
   |> filter(fn: (r) => r["_value"] > 50)
-  |> aggregateWindow(every: 15m, fn: mean, createEmpty: false)
-  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+  |> sort(columns: ["_time"])
 '''
-    interval_recs = query(flux_hourly)
+    flux_exp_h = f'''
+from(bucket: "{BUCKET}")
+  |> range(start: -{days}d)
+  |> filter(fn: (r) => r["_field"] == "expected_power_w")
+  |> filter(fn: (r) => r["_value"] > 50)
+  |> sort(columns: ["_time"])
+'''
+    pwr_h_recs = query(flux_pwr_h)
+    exp_h_recs = query(flux_exp_h)
+
+    # Build expected lookup by IST timestamp for pairing
+    exp_by_ts: dict[str, list] = defaultdict(list)
+    for r in exp_h_recs:
+        ist_dt = r.get_time() + timedelta(hours=5, minutes=30)
+        exp_by_ts[ist_dt.strftime("%Y-%m-%dT%H:%M")].append(float(r.get_value() or 0))
 
     hour_buckets = defaultdict(lambda: {"actual": [], "expected": []})
-    for r in interval_recs:
-        ist_hour = (r.get_time() + timedelta(hours=5, minutes=30)).hour
-        actual   = float(r.values.get("power_now_w",    0) or 0)
-        expected = float(r.values.get("expected_power_w", 0) or 0)
+    for r in pwr_h_recs:
+        ist_dt   = r.get_time() + timedelta(hours=5, minutes=30)
+        ist_hour = ist_dt.hour
+        ts_key   = ist_dt.strftime("%Y-%m-%dT%H:%M")
+        actual   = float(r.get_value() or 0)
+        exp_vals = exp_by_ts.get(ts_key, [])
+        expected = sum(exp_vals) / len(exp_vals) if exp_vals else 0
         if expected > 50:
             hour_buckets[ist_hour]["actual"].append(actual)
             hour_buckets[ist_hour]["expected"].append(expected)

@@ -79,45 +79,59 @@ def _gemini_url(model: str) -> str:
     return f"{_GEMINI_BASE}/v1beta/models/{model}:generateContent"
 
 
-def _build_context(days: int) -> dict:
-    """Pull data from InfluxDB and return a structured context dict."""
-
-    # ── Hourly data for the period ────────────────────────────────────────────
+def _query_field_raw(field: str, days: int, min_val: float = 0) -> list:
+    """Fetch all records for a field sorted by time. aggregateWindow/pivot broken here."""
     flux = f'''
 from(bucket: "{BUCKET}")
   |> range(start: -{days}d)
-  |> filter(fn: (r) =>
-      r["_field"] == "power_now_w" or
-      r["_field"] == "expected_power_w" or
-      r["_field"] == "internal_radiator_temperature")
-  |> filter(fn: (r) => r["_value"] > 0)
-  |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
-  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+  |> filter(fn: (r) => r["_field"] == "{field}")
+  |> filter(fn: (r) => r["_value"] > {min_val})
   |> sort(columns: ["_time"])
 '''
-    recs = query(flux)
+    return query(flux)
+
+
+def _build_context(days: int) -> dict:
+    """Pull data from InfluxDB and return a structured context dict."""
+
+    # ── Fetch each field separately (aggregateWindow+pivot return empty here) ─
+    pwr_recs = _query_field_raw("power_now_w",               days, min_val=0)
+    exp_recs = _query_field_raw("expected_power_w",           days, min_val=50)
+    tmp_recs = _query_field_raw("internal_radiator_temperature", days, min_val=0)
+
+    # Index expected and temperature by IST (date, hour, minute) for fast lookup
+    exp_by_ts: dict[str, float] = {}
+    for r in exp_recs:
+        ist = r.get_time() + timedelta(hours=5, minutes=30)
+        exp_by_ts[ist.strftime("%Y-%m-%dT%H:%M")] = float(r.get_value() or 0)
+
+    tmp_by_ts: dict[str, float] = {}
+    for r in tmp_recs:
+        ist = r.get_time() + timedelta(hours=5, minutes=30)
+        tmp_by_ts[ist.strftime("%Y-%m-%dT%H:%M")] = float(r.get_value() or 0)
 
     daily = defaultdict(lambda: {"actual_wh": 0.0, "expected_wh": 0.0,
-                                  "hours": 0, "hot_hours": 0})
+                                  "hours_seen": set(), "hot_hours": set()})
     hour_buckets = defaultdict(lambda: {"actual": [], "expected": []})
 
-    for r in recs:
-        t = r.get_time()
-        ist = t + timedelta(hours=5, minutes=30)
+    for r in pwr_recs:
+        ist      = r.get_time() + timedelta(hours=5, minutes=30)
         date_str = ist.strftime("%Y-%m-%d")
-        h = ist.hour
-        actual   = float(r.values.get("power_now_w", 0) or 0)
-        expected = float(r.values.get("expected_power_w", 0) or 0)
-        temp     = float(r.values.get("internal_radiator_temperature", 0) or 0)
+        ts_key   = ist.strftime("%Y-%m-%dT%H:%M")
+        h        = ist.hour
+        actual   = float(r.get_value() or 0)
+        expected = exp_by_ts.get(ts_key, 0)
+        temp     = tmp_by_ts.get(ts_key, 0)
 
         if expected > 50:
             month = int(date_str[5:7])
             cal   = calibration_factor(month)
-            daily[date_str]["actual_wh"]   += actual
-            daily[date_str]["expected_wh"] += expected * cal
-            daily[date_str]["hours"]       += 1
+            # Each 5-min record ≈ 5/60 Wh; accumulate as Wh
+            daily[date_str]["actual_wh"]   += actual * (5 / 60)
+            daily[date_str]["expected_wh"] += expected * cal * (5 / 60)
+            daily[date_str]["hours_seen"].add(h)
             if temp > TEMP_WARN:
-                daily[date_str]["hot_hours"] += 1
+                daily[date_str]["hot_hours"].add(ts_key)
             hour_buckets[h]["actual"].append(actual)
             hour_buckets[h]["expected"].append(expected)
 
@@ -128,10 +142,11 @@ from(bucket: "{BUCKET}")
         e = round(d["expected_wh"] / 1000, 2)
         pr = round(a / e * 100, 1) if e > 0 else None
         gap = round((e - a) / e * 100, 1) if e > 0 else 0
+        n_hot = len(d["hot_hours"])
         daily_bars.append({
             "date": ds, "actual_kwh": a, "expected_kwh": e,
             "pr_pct": pr, "gap_pct": max(gap, 0),
-            "hot_hours": d["hot_hours"],
+            "hot_hours": n_hot,
         })
 
     total_actual   = sum(d["actual_kwh"]   for d in daily_bars)
@@ -372,34 +387,27 @@ async def get_ai_insight(days: int = 30) -> Dict[str, Any]:
 # ── Suggestions endpoint ──────────────────────────────────────────────────────
 
 def _get_current_readings() -> dict:
-    """Fetch the last 24h averages and today's peak for context."""
-    flux = f'''
-from(bucket: "{BUCKET}")
-  |> range(start: -24h)
-  |> filter(fn: (r) =>
-      r["_field"] == "power_now_w" or
-      r["_field"] == "expected_power_w" or
-      r["_field"] == "internal_radiator_temperature" or
-      r["_field"] == "pv1_voltage" or
-      r["_field"] == "shortwave_radiation_wm2")
-  |> filter(fn: (r) => r["_value"] > 0)
-  |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
-  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
-'''
-    recs = query(flux)
+    """Fetch last 24h averages and peak for context. Separate queries (no aggregateWindow)."""
+    pwr_r  = _query_field_raw("power_now_w",                  1, min_val=0)
+    exp_r  = _query_field_raw("expected_power_w",              1, min_val=50)
+    tmp_r  = _query_field_raw("internal_radiator_temperature", 1, min_val=0)
+    rad_r  = _query_field_raw("shortwave_radiation_wm2",       1, min_val=0)
 
     temps, actual_powers, expected_powers, radiations = [], [], [], []
     peak_power = 0.0
 
-    for r in recs:
-        t_val  = float(r.values.get("internal_radiator_temperature") or 0)
-        a_val  = float(r.values.get("power_now_w") or 0)
-        e_val  = float(r.values.get("expected_power_w") or 0)
-        rad    = float(r.values.get("shortwave_radiation_wm2") or 0)
-        if t_val > 0: temps.append(t_val)
-        if a_val > 0: actual_powers.append(a_val); peak_power = max(peak_power, a_val)
-        if e_val > 50: expected_powers.append(e_val)
-        if rad > 0: radiations.append(rad)
+    for r in pwr_r:
+        v = float(r.get_value() or 0)
+        if v > 0: actual_powers.append(v); peak_power = max(peak_power, v)
+    for r in exp_r:
+        v = float(r.get_value() or 0)
+        if v > 50: expected_powers.append(v)
+    for r in tmp_r:
+        v = float(r.get_value() or 0)
+        if v > 0: temps.append(v)
+    for r in rad_r:
+        v = float(r.get_value() or 0)
+        if v > 0: radiations.append(v)
 
     avg_temp    = round(sum(temps) / len(temps), 1)        if temps          else None
     max_temp    = round(max(temps), 1)                     if temps          else None
