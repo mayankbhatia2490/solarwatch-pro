@@ -19,11 +19,10 @@ from(bucket: "{BUCKET}")
 @router.get("/live")
 async def electrical_live():
     """All live electrical readings — refreshed every 30s in UI"""
+    # KSY 3.4kW-1Ph: single-phase (R only), 1 MPPT, 1 PV string
     fields = [
         "pv1_voltage", "pv1_current",
-        "pv2_voltage", "pv2_current",
-        "grid_r_voltage", "grid_s_voltage", "grid_t_voltage",
-        "grid_r_current", "grid_s_current", "grid_t_current",
+        "grid_r_voltage", "grid_r_current",
         "grid_frequency", "power_now_w",
         "internal_radiator_temperature", "internal_ambient_temperature",
         "expected_power_w", "status_code"
@@ -33,25 +32,21 @@ async def electrical_live():
     def f(key, default=0.0): return float(data.get(key, default))
 
     pv1_power = round(f("pv1_voltage") * f("pv1_current"), 1)
-    pv2_power = round(f("pv2_voltage") * f("pv2_current"), 1)
-    total_pv_power = pv1_power + pv2_power
-    ac_power = f("power_now_w")
-    efficiency = round(ac_power / total_pv_power * 100, 1) if total_pv_power > 0 else 0
+    ac_power  = f("power_now_w")
+    efficiency = round(ac_power / pv1_power * 100, 1) if pv1_power > 0 else 0
 
     return {
-        # Flat keys — consumed by Electrical and String Compare pages
+        # Flat keys — consumed by Electrical page
         "pv1_voltage": f("pv1_voltage"), "pv1_current": f("pv1_current"), "pv1_power": pv1_power,
-        "pv2_voltage": f("pv2_voltage"), "pv2_current": f("pv2_current"), "pv2_power": pv2_power,
-        "grid_voltage": f("grid_r_voltage"),  # use R-phase as representative
+        "grid_voltage": f("grid_r_voltage"),
         "grid_frequency": f("grid_frequency"),
         "ac_power": ac_power,
         "inverter_temp": f("internal_radiator_temperature"),
         "efficiency": efficiency,
-        # Nested structure — for future detailed use
+        # Nested structure — single string only
         "pv": {
             "string1": {"voltage": f("pv1_voltage"), "current": f("pv1_current"), "power": pv1_power},
-            "string2": {"voltage": f("pv2_voltage"), "current": f("pv2_current"), "power": pv2_power},
-            "total_power_w": total_pv_power,
+            "total_power_w": pv1_power,
         },
         "inverter": {
             "efficiency_pct": efficiency,
@@ -62,8 +57,6 @@ async def electrical_live():
         "ac": {
             "power_w": ac_power,
             "grid_r_voltage": f("grid_r_voltage"),
-            "grid_s_voltage": f("grid_s_voltage"),
-            "grid_t_voltage": f("grid_t_voltage"),
             "frequency_hz": f("grid_frequency"),
         }
     }

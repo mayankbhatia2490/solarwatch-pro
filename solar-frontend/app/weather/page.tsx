@@ -10,7 +10,7 @@ export default function WeatherPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090"}/api/weather`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? ""}/api/weather`);
         if (res.ok) {
           const json = await res.json();
           setData(json);
@@ -38,9 +38,10 @@ export default function WeatherPage() {
   const uvMax = daily.uv_index_max?.[0] ?? "--";
 
   const capacity_kw = ((data.data.system_capacity_w || 3500) / 1000).toFixed(1);
-  const expectedW = data.data.expected_power_w ?? 0;
+  // expected_power_w and efficiency_drop_pct are null when weather API is unavailable
+  const expectedW: number | null = data.data.expected_power_w ?? null;
   const actualW = data.data.actual_power_w ?? 0;
-  const effDrop = data.data.efficiency_drop_pct ?? 0;
+  const effDrop: number | null = data.data.efficiency_drop_pct ?? null;
   const pr = ((data.data.performance_ratio_used || 0.78) * 100).toFixed(0);
 
   // Sky condition label
@@ -67,17 +68,17 @@ export default function WeatherPage() {
         <div className="themed-card p-4 col-span-1">
           <div className="flex items-center gap-2 mb-2">
             <div className="p-1.5 rounded-lg bg-[var(--bg-hover)] text-amber-500"><Sun className="w-4 h-4" /></div>
-            <div className="text-xs font-medium text-[var(--text-secondary)]">Direct Irr.</div>
+            <div className="text-xs font-medium text-[var(--text-secondary)]">POA Irradiance</div>
           </div>
-          <div className="text-xl font-bold">{current.direct_radiation ?? "--"} <span className="text-xs font-normal text-[var(--text-muted)]">W/m²</span></div>
+          <div className="text-xl font-bold">{current.poa_irradiance_wm2 != null ? Math.round(current.poa_irradiance_wm2) : "--"} <span className="text-xs font-normal text-[var(--text-muted)]">W/m²</span></div>
         </div>
 
         <div className="themed-card p-4 col-span-1">
           <div className="flex items-center gap-2 mb-2">
             <div className="p-1.5 rounded-lg bg-[var(--bg-hover)] text-yellow-300"><Sun className="w-4 h-4" /></div>
-            <div className="text-xs font-medium text-[var(--text-secondary)]">Diffuse Irr.</div>
+            <div className="text-xs font-medium text-[var(--text-secondary)]">Shortwave (GHI)</div>
           </div>
-          <div className="text-xl font-bold">{current.diffuse_radiation ?? "--"} <span className="text-xs font-normal text-[var(--text-muted)]">W/m²</span></div>
+          <div className="text-xl font-bold">{current.shortwave_radiation != null ? Math.round(current.shortwave_radiation) : "--"} <span className="text-xs font-normal text-[var(--text-muted)]">W/m²</span></div>
         </div>
 
         <div className="themed-card p-4 col-span-1">
@@ -145,16 +146,25 @@ export default function WeatherPage() {
       {/* Power Potential vs Actual */}
       <div className="themed-card p-6 border-l-4 border-l-emerald-500">
         <h2 className="text-xl font-bold mb-1">Power Potential vs Actual</h2>
-        <p className="text-sm text-[var(--text-muted)] mb-5">Based on KSY 5G-PRO+ {capacity_kw}kW inverter · PR={pr}% · Location: Karnal</p>
+        <p className="text-sm text-[var(--text-muted)] mb-5">Based on KSY 3.4kW-1Ph {capacity_kw}kW inverter · PR={pr}% · Location: Karnal</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-[var(--bg-hover)] p-4 rounded-xl">
             <div className="text-sm text-[var(--text-secondary)] mb-1">Total Irradiance</div>
-            <div className="text-3xl font-bold text-amber-400">{current.total_irradiance ?? (current.direct_radiation + current.diffuse_radiation)} <span className="text-sm font-normal">W/m²</span></div>
+            <div className="text-3xl font-bold text-amber-400">{current.poa_irradiance_wm2 != null ? Math.round(current.poa_irradiance_wm2) : "--"} <span className="text-sm font-normal">W/m²</span></div>
           </div>
           <div className="bg-[var(--bg-hover)] p-4 rounded-xl">
             <div className="text-sm text-[var(--text-secondary)] mb-1">Expected Power (Weather-Adj.)</div>
-            <div className="text-3xl font-bold text-amber-400">{expectedW} <span className="text-sm font-normal">W</span></div>
-            <div className="text-xs text-[var(--text-muted)] mt-1">{capacity_kw}kW × (Irr/1000) × PR</div>
+            {expectedW !== null ? (
+              <>
+                <div className="text-3xl font-bold text-amber-400">{expectedW} <span className="text-sm font-normal">W</span></div>
+                <div className="text-xs text-[var(--text-muted)] mt-1">{capacity_kw}kW × (Irr/1000) × PR</div>
+              </>
+            ) : (
+              <>
+                <div className="text-3xl font-bold text-slate-500">—</div>
+                <div className="text-xs text-[var(--text-muted)] mt-1">Unavailable — weather data offline</div>
+              </>
+            )}
           </div>
           <div className="bg-[var(--bg-hover)] p-4 rounded-xl">
             <div className="text-sm text-[var(--text-secondary)] mb-1">Actual Power (Inverter Live)</div>
@@ -162,14 +172,26 @@ export default function WeatherPage() {
           </div>
         </div>
 
-        {/* Efficiency gap */}
-        {expectedW > 100 && (
+        {/* Efficiency gap — only shown when real expected_power_w is available */}
+        {expectedW !== null && expectedW > 100 && effDrop !== null && (
           <div className="mt-4 flex items-center gap-3">
             <Zap className="w-5 h-5 text-purple-400" />
             <span className="text-sm text-[var(--text-secondary)]">Performance Gap:</span>
             <span className={`text-lg font-bold ${effDrop > 20 ? "text-red-400" : effDrop > 10 ? "text-amber-400" : "text-emerald-400"}`}>
               {effDrop}% {effDrop > 20 ? "⚠ Check panels/shading" : effDrop > 10 ? "↓ Minor loss" : "✓ Normal"}
             </span>
+          </div>
+        )}
+        {expectedW !== null && effDrop === null && (
+          <div className="mt-4 flex items-center gap-3">
+            <Zap className="w-5 h-5 text-slate-500" />
+            <span className="text-sm text-[var(--text-muted)]">Performance gap not shown — irradiance below 15% capacity (low-light losses dominate at this level)</span>
+          </div>
+        )}
+        {expectedW === null && (
+          <div className="mt-4 flex items-center gap-3">
+            <Zap className="w-5 h-5 text-slate-500" />
+            <span className="text-sm text-[var(--text-muted)]">Performance gap unavailable — weather data offline</span>
           </div>
         )}
       </div>

@@ -146,8 +146,7 @@ body {
   border-radius: 0.75rem;
 }
 
-/* ── Light-mode visibility fixes: override hardcoded slate-* Tailwind classes ── */
-/* These ensure dashboard card text shows on white background in light mode */
+/* ── Light-mode: override hardcoded dark Tailwind text colours ───────────────── */
 :root .text-slate-200  { color: var(--card-value) !important; }
 :root .text-slate-300  { color: var(--card-label) !important; }
 :root .text-slate-400  { color: var(--card-label) !important; }
@@ -160,6 +159,40 @@ body {
 .dark .text-slate-400  { color: #94a3b8 !important; }
 .dark .text-slate-500  { color: #64748b !important; }
 .dark .text-white      { color: #ffffff !important; }
+
+/* ── Light-mode: override hardcoded dark Tailwind background classes ─────────── */
+/* Pages used bg-slate-900/60 etc. for dark mode; in light mode these make       */
+/* cards dark while text gets mapped to dark colour → invisible. Fix: remap       */
+/* all dark bg classes to the CSS-variable surface colours.                       */
+:root .bg-slate-900\/60    { background-color: var(--bg-surface)   !important; }
+:root .bg-slate-800\/50    { background-color: var(--bg-surface-2) !important; }
+:root .bg-slate-800        { background-color: var(--bg-surface-2) !important; }
+:root .bg-slate-700        { background-color: var(--bg-border)    !important; }
+:root .border-slate-800    { border-color:     var(--bg-border)    !important; }
+:root .border-slate-700    { border-color:     var(--bg-border)    !important; }
+:root .border-slate-600    { border-color:     var(--bg-border)    !important; }
+:root .hover\:bg-slate-700:hover      { background-color: var(--bg-hover) !important; }
+:root .hover\:bg-slate-600:hover      { background-color: var(--bg-hover) !important; }
+:root .hover\:bg-slate-800\/50:hover  { background-color: var(--bg-hover) !important; }
+
+/* Restore dark-mode exact values */
+.dark .bg-slate-900\/60 { background-color: rgb(2 6 23 / 0.6)   !important; }
+.dark .bg-slate-800\/50 { background-color: rgb(30 41 59 / 0.5)  !important; }
+.dark .bg-slate-800     { background-color: #1e293b              !important; }
+.dark .bg-slate-700     { background-color: #334155              !important; }
+.dark .border-slate-800 { border-color:     #1e293b              !important; }
+.dark .border-slate-700 { border-color:     #334155              !important; }
+.dark .border-slate-600 { border-color:     #475569              !important; }
+.dark .hover\:bg-slate-700:hover { background-color: #334155     !important; }
+.dark .hover\:bg-slate-600:hover { background-color: #475569     !important; }
+
+/* ── Light-mode: input fields ────────────────────────────────────────────────── */
+:root input, :root textarea, :root select {
+  color: var(--card-value);
+  background-color: var(--bg-surface);
+  border-color: var(--bg-border);
+}
+:root input::placeholder { color: var(--card-sub); }
 
 /* ── Chart range toggle (shared by dashboard & electrical pages) ─────────────── */
 .chart-range-bar {

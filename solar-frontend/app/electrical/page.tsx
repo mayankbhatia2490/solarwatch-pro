@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Zap, Thermometer, Activity, RefreshCw, Wifi } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090";
+const API = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 interface ElectricalData {
   pv1_voltage: number; pv1_current: number; pv1_power: number;
@@ -70,21 +70,14 @@ export default function ElectricalPage() {
           <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
             <Zap className="w-4 h-4 text-amber-400" />
           </div>
-          <h2 className="font-semibold text-white">DC Input — PV Strings</h2>
+          <h2 className="font-semibold text-white">DC Input — PV String</h2>
+          <span className="ml-auto text-xs text-slate-500">KSY 3.4kW-1Ph · Single MPPT</span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-slate-800/50 rounded-xl p-4">
-            <p className="text-amber-400 text-xs font-medium uppercase tracking-wider mb-3">String 1</p>
-            <MetricRow label="Voltage" value={d.pv1_voltage?.toFixed(1) ?? "—"} unit="V" status={gridOk(d.pv1_voltage, 100, 450)} />
-            <MetricRow label="Current" value={d.pv1_current?.toFixed(2) ?? "—"} unit="A" status={d.pv1_current > 0 ? "normal" : "unknown"} />
-            <MetricRow label="Power" value={d.pv1_power?.toFixed(0) ?? "—"} unit="W" status={d.pv1_power > 0 ? "normal" : "unknown"} />
-          </div>
-          <div className="bg-slate-800/50 rounded-xl p-4">
-            <p className="text-amber-400 text-xs font-medium uppercase tracking-wider mb-3">String 2</p>
-            <MetricRow label="Voltage" value={d.pv2_voltage?.toFixed(1) ?? "—"} unit="V" status={d.pv2_voltage > 0 ? gridOk(d.pv2_voltage, 100, 450) : "unknown"} />
-            <MetricRow label="Current" value={d.pv2_current?.toFixed(2) ?? "—"} unit="A" status={d.pv2_current > 0 ? "normal" : "unknown"} />
-            <MetricRow label="Power" value={d.pv2_power?.toFixed(0) ?? "—"} unit="W" status={d.pv2_power > 0 ? "normal" : "unknown"} />
-          </div>
+        <div className="bg-slate-800/50 rounded-xl p-4">
+          <p className="text-amber-400 text-xs font-medium uppercase tracking-wider mb-3">String 1 · 6× Vikram HyperSol 595W</p>
+          <MetricRow label="Voltage" value={d.pv1_voltage?.toFixed(1) ?? "—"} unit="V" status={gridOk(d.pv1_voltage, 100, 450)} />
+          <MetricRow label="Current" value={d.pv1_current?.toFixed(2) ?? "—"} unit="A" status={d.pv1_current > 0 ? "normal" : "unknown"} />
+          <MetricRow label="Power" value={d.pv1_power?.toFixed(0) ?? "—"} unit="W" status={d.pv1_power > 0 ? "normal" : "unknown"} />
         </div>
       </div>
 

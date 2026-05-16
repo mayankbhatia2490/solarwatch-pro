@@ -1,23 +1,17 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Sun, Zap, GitBranch, AlertTriangle, Grid, Thermometer, Wrench, TrendingUp, Cloud, FileText, Bell, Settings, Menu, X, Moon } from "lucide-react";
+import { Sun, Activity, Wrench, Settings, Menu, X, Moon, CalendarDays, FileText } from "lucide-react";
 import { useState } from "react";
 import { useTheme } from "next-themes";
 
 const nav = [
-  { href: "/", label: "Dashboard", icon: Sun },
-  { href: "/electrical", label: "Electrical", icon: Zap },
-  { href: "/strings", label: "String Compare", icon: GitBranch },
-  { href: "/anomalies", label: "Anomalies", icon: AlertTriangle },
-  { href: "/grid", label: "Grid Quality", icon: Grid },
-  { href: "/thermal", label: "Thermal", icon: Thermometer },
+  { href: "/",          label: "Dashboard",   icon: Sun },
+  { href: "/monitor",   label: "Live Monitor", icon: Activity },
+  { href: "/longterm",  label: "Long-term",    icon: CalendarDays },
   { href: "/maintenance", label: "Maintenance", icon: Wrench },
-  { href: "/performance", label: "Performance", icon: TrendingUp },
-  { href: "/weather", label: "Weather Context", icon: Cloud },
-  { href: "/reports", label: "Reports", icon: FileText },
-  { href: "/alerts", label: "Alert Config", icon: Bell },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/bills",      label: "Bills",        icon: FileText },
+  { href: "/settings",  label: "Settings",     icon: Settings },
 ];
 
 export function Sidebar() {
@@ -36,7 +30,6 @@ export function Sidebar() {
           <span className="font-bold text-[var(--text-primary)] text-sm">SolarWatch Pro</span>
         </div>
         <div className="flex items-center gap-2">
-          {/* Theme toggle — mobile */}
           <button
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
@@ -56,7 +49,7 @@ export function Sidebar() {
       {/* Sidebar */}
       <aside className={`fixed top-0 left-0 z-40 h-full w-64 bg-[var(--sidebar-bg)] border-r border-[var(--sidebar-border)] flex flex-col transition-transform duration-300 ${open ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}>
         {/* Logo + theme toggle */}
-        <div className="flex items-center justify-between px-5 py-6 border-b border-[var(--sidebar-border)]">
+        <div className="flex items-center justify-between px-5 py-5 border-b border-[var(--sidebar-border)]">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-400 to-green-600 flex items-center justify-center shadow-lg shadow-emerald-900/40">
               <Sun className="w-5 h-5 text-white" />
@@ -66,7 +59,6 @@ export function Sidebar() {
               <div className="text-xs text-[var(--text-secondary)]">Solar Monitoring</div>
             </div>
           </div>
-          {/* Theme toggle — desktop sidebar */}
           <button
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             className="p-2 rounded-xl bg-[var(--bg-hover)] border border-[var(--bg-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
@@ -77,13 +69,13 @@ export function Sidebar() {
         </div>
 
         {/* Live indicator */}
-        <div className="mx-4 mt-4 mb-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2">
+        <div className="mx-4 mt-4 mb-3 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2">
           <span className="pulse-green w-2 h-2 rounded-full bg-emerald-400 inline-block" />
           <span className="text-xs text-emerald-400 font-medium">Live Monitoring Active</span>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
           {nav.map(({ href, label, icon: Icon }) => {
             const active = path === href;
             return (

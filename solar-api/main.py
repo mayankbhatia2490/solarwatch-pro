@@ -1,17 +1,50 @@
 import asyncio
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from routers import dashboard, electrical, notifications, grid, thermal, anomalies, maintenance, performance, weather, reports, settings as settings_router
+from routers import (
+    dashboard, electrical, notifications, grid, thermal,
+    anomalies, maintenance, performance, weather, reports,
+    settings as settings_router, forecast, cleaning, sites, fleet, export, analysis,
+    ai_insight, bills, calibrate,
+)
+from influx import set_request_site_id
+from config import settings
 import monitor
+
+def _run_calibration_bg():
+    """Run irradiance calibration once at startup in a thread."""
+    import os, json
+    cal_file = os.environ.get("CAL_FILE", "/app/irradiance_cal.json")
+    # Skip if calibration is recent (< 7 days old)
+    try:
+        with open(cal_file) as f:
+            cal = json.load(f)
+        from datetime import datetime, timezone, timedelta
+        age = datetime.now(timezone.utc) - datetime.fromisoformat(cal["calibrated_at"])
+        if age < timedelta(days=30):
+            print(f"Calibration fresh ({age.days}d old), skipping startup run.")
+            return
+    except (FileNotFoundError, KeyError, ValueError):
+        pass
+    print("Starting irradiance calibration in background…")
+    try:
+        import sys
+        sys.path.insert(0, "/app")
+        from calibrate_irradiance import run_calibration
+        run_calibration()
+    except Exception as e:
+        print(f"Calibration startup error: {e}")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Start background alert monitor on startup
-    task = asyncio.create_task(monitor.run_monitor())
+    monitor_task = asyncio.create_task(monitor.run_monitor())
+    # Run calibration in thread pool so it doesn't block startup
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, _run_calibration_bg)
     yield
-    # Clean up on shutdown
-    task.cancel()
+    monitor_task.cancel()
 
 app = FastAPI(
     title="SolarWatch Pro API",
@@ -28,10 +61,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
-app.include_router(electrical.router, prefix="/api/electrical", tags=["Electrical"])
-app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
-app.include_router(settings_router.router, prefix="/api/settings", tags=["Settings"])
+@app.middleware("http")
+async def site_id_middleware(request: Request, call_next):
+    """Extract X-Site-ID header and make it available to all Flux queries."""
+    site_id = request.headers.get("X-Site-ID", settings.site_id)
+    set_request_site_id(site_id)
+    response = await call_next(request)
+    return response
+
+app.include_router(dashboard.router,         prefix="/api/dashboard",      tags=["Dashboard"])
+app.include_router(electrical.router,        prefix="/api/electrical",     tags=["Electrical"])
+app.include_router(notifications.router,     prefix="/api/notifications",  tags=["Notifications"])
+app.include_router(settings_router.router,   prefix="/api/settings",       tags=["Settings"])
 app.include_router(grid.router)
 app.include_router(thermal.router)
 app.include_router(anomalies.router)
@@ -39,6 +80,15 @@ app.include_router(maintenance.router)
 app.include_router(performance.router)
 app.include_router(weather.router)
 app.include_router(reports.router)
+app.include_router(forecast.router)
+app.include_router(cleaning.router)
+app.include_router(sites.router)
+app.include_router(fleet.router)
+app.include_router(export.router)
+app.include_router(analysis.router)
+app.include_router(ai_insight.router)
+app.include_router(bills.router)
+app.include_router(calibrate.router)
 
 @app.get("/health")
 async def health():

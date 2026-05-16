@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Bell, BotMessageSquare, Send, CheckCircle, XCircle, Loader2 } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090";
+const API = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 type Status = "idle" | "loading" | "success" | "error";
 

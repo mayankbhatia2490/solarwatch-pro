@@ -1,0 +1,38 @@
+{
+  "name": "SolarWatch Pro",
+  "short_name": "SolarWatch",
+  "description": "Real-time solar system monitoring and analytics",
+  "theme_color": "#1B2B6B",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["utilities", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "url": "/dashboard",
+      "description": "Live power and savings overview"
+    },
+    {
+      "name": "Anomalies",
+      "url": "/anomalies",
+      "description": "Active alerts and issues"
+    }
+  ]
+}

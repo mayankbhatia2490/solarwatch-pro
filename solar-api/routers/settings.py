@@ -1,5 +1,5 @@
 """
-Settings router — GET /api/settings, PATCH /api/settings
+Settings router — GET /api/settings, PATCH /api/settings, GET /api/settings/branding
 Persists user overrides to /app/data/settings_override.json so they
 survive container restarts without requiring a rebuild.
 """
@@ -10,6 +10,8 @@ from pathlib import Path
 import json
 
 from config import settings as _env_settings
+
+_BRANDING_FILE = Path(__file__).parent.parent / "branding.json"
 
 router = APIRouter()
 
@@ -73,3 +75,27 @@ async def update_settings(payload: SettingsPayload):
     _override.update(updates)
     _save_override()
     return {"ok": True, "settings": merged()}
+
+@router.get("/branding")
+async def get_branding():
+    """White-label branding config — frontend reads app name, colours, support links from here."""
+    try:
+        return json.loads(_BRANDING_FILE.read_text())
+    except Exception:
+        return {
+            "app_name": "SolarWatch Pro",
+            "company_name": "SolarWatch",
+            "primary_color": "#1B2B6B",
+            "accent_color": "#C9A84C",
+        }
+
+@router.patch("/branding")
+async def update_branding(updates: dict):
+    """Update white-label branding fields."""
+    try:
+        current = json.loads(_BRANDING_FILE.read_text()) if _BRANDING_FILE.exists() else {}
+        current.update(updates)
+        _BRANDING_FILE.write_text(json.dumps(current, indent=2))
+        return {"ok": True, "branding": current}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}

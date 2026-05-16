@@ -1,148 +1,218 @@
 from fastapi import APIRouter
 from typing import Dict, Any
 import httpx
+import math
 from datetime import datetime, timezone
 from config import settings
 from influx import query
+from cal_utils import calibration_factor
+import solcast
 
 router = APIRouter(prefix="/api/weather", tags=["Weather"])
 
-# Use coordinates from environment config (Karnal, Haryana)
-LAT = float(settings.latitude)
-LON = float(settings.longitude)
+LAT        = float(settings.latitude)
+LON        = float(settings.longitude)
 CAPACITY_W = settings.installed_capacity_w
 
-# Performance Ratio for India: accounts for soiling (3-5%), temp losses (5-8%),
-# cable losses (2%), inverter efficiency (98% per KSY datasheet), shading (1%)
-# => Total PR ≈ 0.78 for a well-maintained Indian rooftop system
-PERFORMANCE_RATIO = 0.78
+PANEL_TILT         = 5
+PANEL_AZIMUTH      = 0
+PERFORMANCE_RATIO  = 0.83
+BIFACIAL_REAR_GAIN = 0.09
+TEMP_COEFF         = -0.0030   # γ (Pmax): -0.30%/°C — Vikram HyperSol N-type
+NOCT               = 45.0      # °C (IEC standard)
+
 
 def _get_live_power() -> float:
-    """Fetch the latest actual power from InfluxDB."""
-    bucket = settings.influxdb_bucket
+    """15-minute mean of non-zero power readings — smooths Shinemonitor's noisy real-time field."""
     flux = f'''
-from(bucket: "{bucket}")
-  |> range(start: -2h)
+from(bucket: "{settings.influxdb_bucket}")
+  |> range(start: -15m)
   |> filter(fn: (r) => r["_field"] == "power_now_w")
+  |> filter(fn: (r) => r["_value"] > 0)
+  |> sort(columns: ["_time"])
+'''
+    recs = query(flux)
+    if not recs:
+        return 0.0
+    vals = [float(r.get_value()) for r in recs]
+    return sum(vals) / len(vals)
+
+
+def _get_live_temp() -> float | None:
+    """Return last inverter ambient temperature for NOCT correction."""
+    flux = f'''
+from(bucket: "{settings.influxdb_bucket}")
+  |> range(start: -2h)
+  |> filter(fn: (r) => r["_field"] == "temperature_2m")
   |> last()
 '''
     recs = query(flux)
-    return float(recs[0].get_value()) if recs else 0.0
+    return float(recs[0].get_value()) if recs else None
 
 
-@router.get("/")
+def _low_irr_factor(poa_wm2: float) -> float:
+    """
+    Inverter partial-load efficiency correction at low irradiance.
+    String inverters lose ~5% per log10 decade below 1000 W/m² (IEA PVPS Task 13).
+    Clamped to [0.75, 1.0] — even at very low light, we don't go below 75% of nominal PR.
+    """
+    if poa_wm2 <= 0:
+        return 1.0
+    return max(0.75, 1.0 + 0.05 * math.log10(poa_wm2 / 1000.0))
+
+
+def _expected_power(poa_wm2: float, temp_c: float, month: int) -> int:
+    """NOCT + temperature + low-irradiance-corrected expected power with calibration factor."""
+    T_cell   = temp_c + (NOCT - 20.0) * (poa_wm2 / 800.0)
+    t_corr   = 1 + TEMP_COEFF * (T_cell - 25.0)
+    cal      = calibration_factor(month)
+    pr_eff   = PERFORMANCE_RATIO * _low_irr_factor(poa_wm2)
+    return round((poa_wm2 / 1000.0) * CAPACITY_W * (1 + BIFACIAL_REAR_GAIN) * pr_eff * t_corr * cal)
+
+
+@router.get("")
 async def get_weather() -> Dict[str, Any]:
     """
-    Fetches real-time weather from Open-Meteo for Karnal, Haryana (29.68°N, 76.99°E).
-    Calculates expected solar power using KSY 3.5kW inverter specs and actual PR=0.78.
-    Actual power comes from live InfluxDB reading (not mocked).
+    Real-time weather and solar irradiance.
+    Irradiance source priority:
+      1. Solcast estimated_actuals (satellite-based, best for Indo-Gangetic haze)
+      2. Open-Meteo global_tilted_irradiance (ERA5 reanalysis, good but misses fog)
+    Open-Meteo still provides temperature, humidity, wind, rain.
+    Expected power uses NOCT + temperature correction + low-irradiance PR correction + monthly cal.
+    Actual power is the 15-minute mean of non-zero inverter readings.
     """
-    url = (
-        f"https://api.open-meteo.com/v1/forecast"
-        f"?latitude={LAT}&longitude={LON}"
-        f"&current=temperature_2m,relative_humidity_2m,cloud_cover,wind_speed_10m,"
-        f"direct_radiation,diffuse_radiation,apparent_temperature,precipitation"
-        f"&hourly=temperature_2m,cloud_cover,direct_radiation,diffuse_radiation"
-        f"&daily=sunrise,sunset,uv_index_max,precipitation_sum"
-        f"&timezone=Asia%2FKolkata"
-        f"&forecast_days=3"
-    )
+    current_month = datetime.now(timezone.utc).month
+    actual_power_w = round(_get_live_power())
+
+    # ── Fetch Open-Meteo (weather + irradiance backup) ────────────────────────
+    om_data    = None
+    om_current = {}
+    om_hourly  = {}
+    om_daily   = {}
+    om_poa     = None
 
     try:
+        url = (
+            f"https://api.open-meteo.com/v1/forecast"
+            f"?latitude={LAT}&longitude={LON}"
+            f"&current=temperature_2m,relative_humidity_2m,cloud_cover,wind_speed_10m,"
+            f"shortwave_radiation,apparent_temperature,precipitation"
+            f"&hourly=temperature_2m,cloud_cover,global_tilted_irradiance,shortwave_radiation"
+            f"&daily=sunrise,sunset,uv_index_max,precipitation_sum"
+            f"&tilt={PANEL_TILT}&azimuth={PANEL_AZIMUTH}"
+            f"&timezone=Asia%2FKolkata&forecast_days=3"
+        )
         async with httpx.AsyncClient(timeout=8.0) as client:
             resp = await client.get(url)
             if resp.status_code == 200:
-                data = resp.json()
-                current = data.get("current", {})
+                om_data    = resp.json()
+                om_current = om_data.get("current", {})
+                om_hourly  = om_data.get("hourly", {})
+                om_daily   = om_data.get("daily", {})
 
-                # Irradiance = direct + diffuse (both from Open-Meteo)
-                direct_rad = current.get("direct_radiation", 0) or 0
-                diffuse_rad = current.get("diffuse_radiation", 0) or 0
-                total_irradiance = direct_rad + diffuse_rad
-
-                # Expected power using STC formula corrected for actual conditions:
-                # P_expected = (G / 1000) * P_rated * PR
-                # where G = total irradiance, P_rated = 3500W, PR = 0.78
-                expected_power_w = round((total_irradiance / 1000.0) * CAPACITY_W * PERFORMANCE_RATIO)
-
-                # Actual power from live InfluxDB data
-                actual_power_w = round(_get_live_power())
-
-                # Efficiency drop vs expected (only meaningful when sun is up)
-                efficiency_drop_pct = 0.0
-                if expected_power_w > 100:
-                    efficiency_drop_pct = round(
-                        max(0, (expected_power_w - actual_power_w) / expected_power_w * 100), 1
-                    )
-
-                # Build 3-day hourly forecast for chart
-                hourly = data.get("hourly", {})
-                daily = data.get("daily", {})
-
-                return {
-                    "status": "success",
-                    "location": {
-                        "name": "Karnal, Haryana",
-                        "latitude": LAT,
-                        "longitude": LON,
-                        "timezone": "Asia/Kolkata"
-                    },
-                    "data": {
-                        "current": {
-                            "temperature_2m": current.get("temperature_2m"),
-                            "apparent_temperature": current.get("apparent_temperature"),
-                            "relative_humidity_2m": current.get("relative_humidity_2m"),
-                            "cloud_cover": current.get("cloud_cover"),
-                            "wind_speed_10m": current.get("wind_speed_10m"),
-                            "direct_radiation": direct_rad,
-                            "diffuse_radiation": diffuse_rad,
-                            "total_irradiance": total_irradiance,
-                            "precipitation": current.get("precipitation", 0),
-                        },
-                        "hourly": {
-                            "time": hourly.get("time", [])[:48],
-                            "temperature_2m": hourly.get("temperature_2m", [])[:48],
-                            "cloud_cover": hourly.get("cloud_cover", [])[:48],
-                            "direct_radiation": hourly.get("direct_radiation", [])[:48],
-                            "diffuse_radiation": hourly.get("diffuse_radiation", [])[:48],
-                        },
-                        "daily": {
-                            "sunrise": daily.get("sunrise", [])[:3],
-                            "sunset": daily.get("sunset", [])[:3],
-                            "uv_index_max": daily.get("uv_index_max", [])[:3],
-                            "precipitation_sum": daily.get("precipitation_sum", [])[:3],
-                        },
-                        "expected_power_w": expected_power_w,
-                        "actual_power_w": actual_power_w,
-                        "efficiency_drop_pct": efficiency_drop_pct,
-                        "performance_ratio_used": PERFORMANCE_RATIO,
-                        "system_capacity_w": CAPACITY_W,
-                    }
-                }
+                ghi        = om_current.get("shortwave_radiation", 0) or 0
+                now_iso    = om_current.get("time", "")[:13]
+                h_times    = om_hourly.get("time", [])
+                h_poa      = om_hourly.get("global_tilted_irradiance", [])
+                om_poa     = ghi
+                for i, t in enumerate(h_times):
+                    if t.startswith(now_iso) and i < len(h_poa) and h_poa[i] is not None:
+                        om_poa = h_poa[i]
+                        break
     except Exception as e:
-        print(f"Weather API error: {e}")
+        print(f"Open-Meteo error: {e}")
 
-    # Fallback: still use real InfluxDB power, just no weather
-    actual_power_w = round(_get_live_power())
+    # ── Solcast irradiance (primary) — falls back to Open-Meteo if unavailable ─
+    sc = solcast.get_current_irradiance()
+    if sc and sc.get("gti_wm2", 0) > 0:
+        poa_irradiance    = sc["gti_wm2"]
+        irradiance_source = "solcast"
+    elif om_poa is not None:
+        poa_irradiance    = om_poa
+        irradiance_source = "open-meteo"
+    else:
+        poa_irradiance    = None
+        irradiance_source = "unavailable"
+
+    # ── Expected power ────────────────────────────────────────────────────────
+    temp_c = om_current.get("temperature_2m") or _get_live_temp() or 35.0
+    if poa_irradiance is not None and poa_irradiance > 0:
+        expected_power_w = _expected_power(poa_irradiance, temp_c, current_month)
+        # Gap only shown above 15% capacity — below that the low-irradiance
+        # correction is approximate and results are not actionable.
+        efficiency_drop_pct = (
+            round(max(0, (expected_power_w - actual_power_w) / expected_power_w * 100), 1)
+            if expected_power_w > CAPACITY_W * 0.15 else None
+        )
+    else:
+        expected_power_w    = None
+        efficiency_drop_pct = None
+
+    # ── Build response ────────────────────────────────────────────────────────
+    if om_data:
+        ghi = om_current.get("shortwave_radiation", 0) or 0
+        return {
+            "status": "success",
+            "irradiance_source": irradiance_source,
+            "solcast_calls_today": solcast.call_status(),
+            "location": {
+                "name":      settings.location_name,
+                "latitude":  LAT,
+                "longitude": LON,
+                "timezone":  "Asia/Kolkata",
+            },
+            "data": {
+                "current": {
+                    "temperature_2m":       om_current.get("temperature_2m"),
+                    "apparent_temperature": om_current.get("apparent_temperature"),
+                    "relative_humidity_2m": om_current.get("relative_humidity_2m"),
+                    "cloud_cover":          om_current.get("cloud_cover"),
+                    "wind_speed_10m":       om_current.get("wind_speed_10m"),
+                    "poa_irradiance_wm2":   poa_irradiance,
+                    "shortwave_radiation":  ghi,
+                    "precipitation":        om_current.get("precipitation", 0),
+                },
+                "hourly": {
+                    "time":                     om_hourly.get("time", [])[:48],
+                    "temperature_2m":           om_hourly.get("temperature_2m", [])[:48],
+                    "cloud_cover":              om_hourly.get("cloud_cover", [])[:48],
+                    "global_tilted_irradiance": om_hourly.get("global_tilted_irradiance", [])[:48],
+                    "shortwave_radiation":      om_hourly.get("shortwave_radiation", [])[:48],
+                },
+                "daily": {
+                    "sunrise":          om_daily.get("sunrise", [])[:3],
+                    "sunset":           om_daily.get("sunset",  [])[:3],
+                    "uv_index_max":     om_daily.get("uv_index_max", [])[:3],
+                    "precipitation_sum":om_daily.get("precipitation_sum", [])[:3],
+                },
+                "solar_radiation_wm2": poa_irradiance,
+                "expected_power_w":    expected_power_w,
+                "actual_power_w":      actual_power_w,
+                "efficiency_drop_pct": efficiency_drop_pct,
+                "performance_ratio_used": round(PERFORMANCE_RATIO * _low_irr_factor(poa_irradiance or 1000), 3),
+                "system_capacity_w":   CAPACITY_W,
+                "irradiance_source":   irradiance_source,
+            },
+        }
+
+    # ── Full fallback — Open-Meteo also failed ─────────────────────────────────
     return {
-        "status": "partial",
-        "location": {"name": "Karnal, Haryana", "latitude": LAT, "longitude": LON},
+        "status": "weather_unavailable",
+        "irradiance_source": irradiance_source,
+        "location": {"name": settings.location_name, "latitude": LAT, "longitude": LON},
         "data": {
             "current": {
-                "temperature_2m": 35.0,
-                "apparent_temperature": 38.0,
-                "relative_humidity_2m": 45,
-                "cloud_cover": 15,
-                "wind_speed_10m": 10.0,
-                "direct_radiation": 700,
-                "diffuse_radiation": 150,
-                "total_irradiance": 850,
-                "precipitation": 0,
+                "temperature_2m": None, "apparent_temperature": None,
+                "relative_humidity_2m": None, "cloud_cover": None,
+                "wind_speed_10m": None, "poa_irradiance_wm2": poa_irradiance,
+                "shortwave_radiation": None, "precipitation": None,
             },
-            "expected_power_w": round((850 / 1000.0) * CAPACITY_W * PERFORMANCE_RATIO),
-            "actual_power_w": actual_power_w,
-            "efficiency_drop_pct": 0.0,
+            "solar_radiation_wm2": poa_irradiance,
+            "expected_power_w":    expected_power_w,
+            "actual_power_w":      actual_power_w,
+            "efficiency_drop_pct": efficiency_drop_pct,
             "performance_ratio_used": PERFORMANCE_RATIO,
-            "system_capacity_w": CAPACITY_W,
-        }
+            "system_capacity_w":   CAPACITY_W,
+            "irradiance_source":   irradiance_source,
+        },
     }

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 router = APIRouter(prefix="/api/reports", tags=["Reports"])
 
-@router.get("/")
+@router.get("")
 def get_available_reports() -> Dict[str, Any]:
     """
     Returns a list of generated reports and configuration options.
