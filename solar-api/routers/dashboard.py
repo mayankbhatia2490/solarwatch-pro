@@ -68,17 +68,30 @@ async def _om_expected_map(past_days: int) -> dict[str, float]:
         print(f"OM expected map error: {e}")
         return {}
 
-def _latest(field: str) -> float:
+def _latest(field: str, hours: int = 2) -> float:
     flux = f'''
 from(bucket: "{BUCKET}")
-  |> range(start: -2h)
+  |> range(start: -{hours}h)
   |> filter(fn: (r) => r["_field"] == "{field}")
   |> last()
 '''
     recs = query(flux)
     return float(recs[0].get_value()) if recs else 0.0
 
+def _latest_persistent(field: str) -> float:
+    """For cumulative counters (total_energy_kwh) — survives overnight gaps by looking back 48h."""
+    for hours in [2, 48]:
+        val = _latest(field, hours=hours)
+        if val > 0:
+            return val
+    return 0.0
+
 def _compute_health(live: dict) -> int:
+    # At night the inverter is off — all live readings are stale zeroes.
+    # Skip electrical checks; return 95 (resting, last known state OK).
+    if live.get("is_night", False):
+        return 95
+
     score = 100
     # Grid voltage — single-phase (KSY 3.4KW-1Ph), R phase only
     v = live.get("grid_r_voltage", 230)
@@ -89,19 +102,18 @@ def _compute_health(live: dict) -> int:
     if t > 85:   score -= 30
     elif t > 75: score -= 15
     # Performance ratio during daylight
-    if not live.get("is_night", False):
-        power    = live.get("power_now_w", 0)
-        expected = live.get("expected_power_w", 0)
-        if expected > 200:
-            pr = power / expected
-            if pr < 0.60:   score -= 15
-            elif pr < 0.80: score -= 5
+    power    = live.get("power_now_w", 0)
+    expected = live.get("expected_power_w", 0)
+    if expected > 200:
+        pr = power / expected
+        if pr < 0.60:   score -= 15
+        elif pr < 0.80: score -= 5
     # PV1 absent while online during daylight
     pv1 = live.get("pv1_voltage", 0)
-    if pv1 < 50 and live.get("status_code", 0) == 0 and not live.get("is_night", False):
+    if pv1 < 50 and live.get("status_code", 0) == 0:
         score -= 15
     # Inverter offline during daylight
-    if live.get("status_code", 0) == 1 and not live.get("is_night", False):
+    if live.get("status_code", 0) == 1:
         score -= 30
     return max(0, score)
 
@@ -144,7 +156,7 @@ async def dashboard_summary():
     """Main dashboard — all KPIs in a single call, including sunrise/sunset for night detection."""
     power = _latest("power_now_w")
     energy_today = _correct(_latest("daily_energy_kwh"))
-    total_energy = _correct(_latest("total_energy_kwh"))
+    total_energy = _correct(_latest_persistent("total_energy_kwh"))
     temp = _latest("internal_radiator_temperature")
     cloud = _latest("cloud_cover_pct")
     radiation = _latest("shortwave_radiation_wm2")
