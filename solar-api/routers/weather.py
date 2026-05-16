@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from typing import Dict, Any
-import httpx
+import httpx, json, os
 from datetime import datetime, timezone
 from config import settings
 from influx import query
@@ -11,15 +11,22 @@ LAT        = float(settings.latitude)
 LON        = float(settings.longitude)
 CAPACITY_W = settings.installed_capacity_w
 
-# Panel geometry — measured on-site: low 118cm, high 160cm, slant 460cm → 5.2° tilt, south-facing
-PANEL_TILT    = 5    # degrees from horizontal
-PANEL_AZIMUTH = 0    # 0 = true south (Open-Meteo convention)
+PANEL_TILT    = 5
+PANEL_AZIMUTH = 0
+PERFORMANCE_RATIO  = 0.83
+BIFACIAL_REAR_GAIN = 0.09
 
-# System PR for Vikram HyperSol N-type bifacial (new installation)
-# 0.83 = inverter η(97%) × DC wire(98.5%) × AC wire(99.5%) × mismatch(99%) × soiling(99%)
-# Temperature losses are handled separately via the NOCT formula in the collector.
-PERFORMANCE_RATIO = 0.83
-BIFACIAL_REAR_GAIN = 0.09   # 9% rear gain at 5° tilt on concrete roof
+_CAL_FILE = os.environ.get("CAL_FILE", "/app/irradiance_cal.json")
+
+
+def _calibration_factor(month: int) -> float:
+    """Return the monthly correction factor from irradiance calibration, default 1.0."""
+    try:
+        with open(_CAL_FILE) as f:
+            cal = json.load(f)
+        return cal.get("correction_factors", {}).get(str(month), 1.0)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return 1.0
 
 
 def _get_live_power() -> float:
@@ -74,11 +81,11 @@ async def get_weather() -> Dict[str, Any]:
                         poa_irradiance = h_poa[i]
                         break
 
-                # Expected power: POA × capacity × bifacial gain × PR
-                # Temperature correction is embedded in the collector formula;
-                # here we use a simplified version for display purposes.
+                # Expected power: POA × capacity × bifacial gain × PR × calibration factor
+                current_month = datetime.now(timezone.utc).month
+                cal_factor    = _calibration_factor(current_month)
                 expected_power_w = round(
-                    (poa_irradiance / 1000.0) * CAPACITY_W * (1 + BIFACIAL_REAR_GAIN) * PERFORMANCE_RATIO
+                    (poa_irradiance / 1000.0) * CAPACITY_W * (1 + BIFACIAL_REAR_GAIN) * PERFORMANCE_RATIO * cal_factor
                 )
 
                 actual_power_w = round(_get_live_power())

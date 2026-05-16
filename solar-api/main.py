@@ -6,17 +6,45 @@ from routers import (
     dashboard, electrical, notifications, grid, thermal,
     anomalies, maintenance, performance, weather, reports,
     settings as settings_router, forecast, cleaning, sites, fleet, export, analysis,
-    ai_insight, bills,
+    ai_insight, bills, calibrate,
 )
 from influx import set_request_site_id
 from config import settings
 import monitor
 
+def _run_calibration_bg():
+    """Run irradiance calibration once at startup in a thread."""
+    import os, json
+    cal_file = os.environ.get("CAL_FILE", "/app/irradiance_cal.json")
+    # Skip if calibration is recent (< 7 days old)
+    try:
+        with open(cal_file) as f:
+            cal = json.load(f)
+        from datetime import datetime, timezone, timedelta
+        age = datetime.now(timezone.utc) - datetime.fromisoformat(cal["calibrated_at"])
+        if age < timedelta(days=7):
+            print(f"Calibration fresh ({age.days}d old), skipping startup run.")
+            return
+    except (FileNotFoundError, KeyError, ValueError):
+        pass
+    print("Starting irradiance calibration in background…")
+    try:
+        import sys
+        sys.path.insert(0, "/app")
+        from calibrate_irradiance import run_calibration
+        run_calibration()
+    except Exception as e:
+        print(f"Calibration startup error: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    task = asyncio.create_task(monitor.run_monitor())
+    monitor_task = asyncio.create_task(monitor.run_monitor())
+    # Run calibration in thread pool so it doesn't block startup
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, _run_calibration_bg)
     yield
-    task.cancel()
+    monitor_task.cancel()
 
 app = FastAPI(
     title="SolarWatch Pro API",
