@@ -22,7 +22,7 @@ def _run_calibration_bg():
             cal = json.load(f)
         from datetime import datetime, timezone, timedelta
         age = datetime.now(timezone.utc) - datetime.fromisoformat(cal["calibrated_at"])
-        if age < timedelta(days=7):
+        if age < timedelta(days=30):
             print(f"Calibration fresh ({age.days}d old), skipping startup run.")
             return
     except (FileNotFoundError, KeyError, ValueError):
