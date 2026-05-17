@@ -6,6 +6,7 @@ from typing import Optional
 import httpx
 import asyncio
 from cal_utils import calibration_factor, actual_kwh as _correct
+import inverter as inv
 
 router = APIRouter()
 
@@ -408,3 +409,77 @@ async def health_scorecard():
          "status": "critical" if temp > 85 else ("warning" if temp > 75 else "normal")},
         {"parameter": "AC Output", "value": f"{power:.0f}W", "status": "normal" if power >= 0 else "critical"},
     ]}
+
+
+@router.get("/inverter")
+async def inverter_diagnostics():
+    """
+    KSolar 5G-PRO+ specific diagnostics.
+    Uses inverter internal ambient sensor (not Open-Meteo) for thermal assessment.
+    """
+    power    = _latest("power_now_w")
+    pv1_v    = _latest("pv1_voltage")
+    pv1_a    = _latest("pv1_current")
+    # internal_ambient_temperature = inverter's own internal sensor (near the inverter, not Karnal weather)
+    radiator = _latest("internal_radiator_temperature")
+    ambient  = _latest("internal_ambient_temperature")   # inverter case ambient, not city weather
+    poa      = _latest("poa_irradiance_wm2")
+
+    # Fault code — string field, needs separate query
+    flux_fault = f'''
+from(bucket: "{BUCKET}")
+  |> range(start: -24h)
+  |> filter(fn: (r) => r["_field"] == "fault_code_str")
+  |> last()
+'''
+    fault_recs  = query(flux_fault)
+    fault_code  = str(fault_recs[0].get_value()) if fault_recs else None
+
+    # Efficiency trend — last 30 readings
+    flux_eff = f'''
+from(bucket: "{BUCKET}")
+  |> range(start: -3h)
+  |> filter(fn: (r) => r["_field"] == "dc_ac_efficiency_pct")
+  |> filter(fn: (r) => r["_value"] > 0)
+  |> sort(columns: ["_time"])
+'''
+    eff_recs = query(flux_eff)
+    eff_vals = [round(float(r.get_value()), 1) for r in eff_recs if r.get_value()]
+    avg_eff  = round(sum(eff_vals) / len(eff_vals), 1) if eff_vals else None
+    live_eff = eff_vals[-1] if eff_vals else inv.dc_ac_efficiency(power, pv1_v, pv1_a)
+
+    from datetime import datetime
+    hour = datetime.now(timezone(timedelta(hours=5, minutes=30))).hour
+
+    fault_decoded  = inv.decode_fault(fault_code)
+    eff_ctx        = inv.efficiency_context(live_eff, power)
+    thermal        = inv.thermal_context(radiator, ambient if ambient > 0 else radiator - 15)
+    voltage_hdr    = inv.pv_voltage_headroom(pv1_v)
+    shading        = inv.shading_signal(pv1_v, poa, hour)
+
+    return {
+        "model":            "KSY-3.4KW-1Ph",
+        "rated_ac_w":       inv.RATED_AC_W,
+        "max_dc_voltage_v": inv.MAX_DC_VOLTAGE_V,
+        "num_mppt":         inv.NUM_MPPT,
+        "fault_code":       fault_code,
+        "fault_decoded":    fault_decoded,
+        "efficiency": {
+            "live_pct":    live_eff,
+            "avg_3h_pct":  avg_eff,
+            "spec_peak":   inv.MAX_EFFICIENCY * 100,
+            "context":     eff_ctx,
+        },
+        "thermal":          thermal,
+        "voltage_headroom": voltage_hdr,
+        "shading_signal":   shading,
+        "raw": {
+            "power_ac_w":       power,
+            "pv1_voltage_v":    pv1_v,
+            "pv1_current_a":    pv1_a,
+            "pv1_dc_w":         round(pv1_v * pv1_a, 1),
+            "radiator_temp_c":  radiator,
+            "internal_ambient_c": ambient,
+            "poa_wm2":          poa,
+        },
+    }

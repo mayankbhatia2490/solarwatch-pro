@@ -465,6 +465,16 @@ def job():
         # Real-time AI event detection
         ai_analyst.check_realtime_events(solar, weather, send_email_alert)
 
+        # ── Pre-compute derived inverter metrics ──────────────────────────────
+        extra = solar.get('extra_metrics', {})
+        pv1_v = extra.get('pv1_voltage', 0.0)
+        pv1_a = extra.get('pv1_current', 0.0)
+        dc_w  = pv1_v * pv1_a
+        if dc_w > 50 and solar['power_now_w'] > 0:
+            extra['dc_ac_efficiency_pct'] = round(
+                min(solar['power_now_w'] / dc_w * 100, 100.0), 1
+            )
+
         # Write to InfluxDB — tag with site_id for multi-tenant support
         point = (
             Point("solar_metrics")
@@ -486,7 +496,11 @@ def job():
             .field("health_score",           int(health_score))
         )
 
-        for k, v in solar.get("extra_metrics", {}).items():
+        # Fault code from inverter (string field — KSolar F0–F19)
+        if solar.get('fault_code'):
+            point = point.field("fault_code_str", str(solar['fault_code']))
+
+        for k, v in extra.items():
             point = point.field(k, float(v))
 
         write_api.write(bucket=INFLUX_BUCKET, record=point)

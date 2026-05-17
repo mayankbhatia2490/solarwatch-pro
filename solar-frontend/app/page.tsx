@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
-import { Sun, Zap, IndianRupee, Leaf, Activity, Cloud, CloudSun, CloudDrizzle, RefreshCw, TrendingUp, AlertCircle, CheckCircle, AlertTriangle, Calendar, Droplets } from "lucide-react";
+import { Sun, Zap, IndianRupee, Leaf, Activity, Cloud, CloudSun, CloudDrizzle, RefreshCw, TrendingUp, AlertCircle, CheckCircle, AlertTriangle, Calendar, Droplets, Thermometer, Gauge, Eye, Cpu } from "lucide-react";
 import { GenerationChart } from "@/components/generation-chart";
 import { ActionCards } from "@/components/action-cards";
 import { fetchDashboardSummary, fetchDailyChart, fetchHealthScorecard } from "@/lib/api";
@@ -329,6 +329,167 @@ function PerformanceSection({ analysis, cleaning, isDark }: { analysis: any; cle
   );
 }
 
+// ── Inverter Diagnostics ───────────────────────────────────────────────────────
+
+function InverterStatusBadge({ status, label }: { status: string; label: string }) {
+  const colors: Record<string, string> = {
+    excellent: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+    good:      "bg-emerald-500/10 text-emerald-300 border-emerald-500/20",
+    normal:    "bg-emerald-500/10 text-emerald-300 border-emerald-500/20",
+    warm:      "bg-amber-500/10  text-amber-300   border-amber-500/20",
+    caution:   "bg-amber-500/10  text-amber-400   border-amber-500/20",
+    low:       "bg-amber-500/15  text-amber-400   border-amber-500/30",
+    warning:   "bg-red-500/10    text-red-400     border-red-500/20",
+    critical:  "bg-red-500/20    text-red-400     border-red-500/30",
+    poor:      "bg-red-500/20    text-red-400     border-red-500/30",
+    info:      "bg-blue-500/10   text-blue-400    border-blue-500/20",
+    no_data:   "bg-slate-500/10  text-slate-400   border-slate-500/20",
+  };
+  const cls = colors[status] ?? colors.no_data;
+  return (
+    <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${cls}`}>{label}</span>
+  );
+}
+
+function InverterMetricRow({ icon: Icon, label, value, badge, sub, iconColor = "text-slate-400" }: any) {
+  return (
+    <div className="flex items-start justify-between py-3 border-b last:border-0" style={{ borderColor: "var(--bg-border)" }}>
+      <div className="flex items-center gap-2.5 min-w-0">
+        <Icon className={`w-4 h-4 flex-shrink-0 ${iconColor}`} />
+        <div className="min-w-0">
+          <div className="text-sm" style={{ color: "var(--card-label)" }}>{label}</div>
+          {sub && <div className="text-xs mt-0.5 truncate" style={{ color: "var(--card-sub)" }}>{sub}</div>}
+        </div>
+      </div>
+      <div className="flex items-center gap-2 ml-3 flex-shrink-0">
+        <span className="text-sm font-medium text-right" style={{ color: "var(--card-value)" }}>{value}</span>
+        {badge && <InverterStatusBadge status={badge.status} label={badge.label} />}
+      </div>
+    </div>
+  );
+}
+
+function InverterDiagnosticsPanel({ diag }: { diag: any }) {
+  if (!diag) return null;
+
+  const raw = diag.raw ?? {};
+  const fault = diag.fault_decoded;
+  const eff   = diag.efficiency ?? {};
+  const therm = diag.thermal ?? {};
+  const volt  = diag.voltage_headroom ?? {};
+  const shade = diag.shading_signal;
+  const isDay = raw.power_ac_w > 0 || (raw.pv1_voltage_v ?? 0) > 10;
+
+  return (
+    <div className="glass-card rounded-2xl p-5 space-y-4">
+      {/* Section header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Cpu className="w-4 h-4 text-blue-400" />
+          <h2 className="font-semibold" style={{ color: "var(--card-title)" }}>Inverter Diagnostics</h2>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700/50 border border-slate-600/30 text-slate-400">
+            {diag.model}
+          </span>
+        </div>
+        <a href="/thermal" className="text-xs text-emerald-500 hover:underline">Full thermal →</a>
+      </div>
+
+      {/* Active fault banner */}
+      {fault && fault.code && (
+        <div className={`rounded-xl p-4 border-l-4 ${fault.severity === "critical" ? "border-l-red-500 bg-red-500/5" : fault.severity === "warning" ? "border-l-amber-500 bg-amber-500/5" : "border-l-blue-500 bg-blue-500/5"}`}>
+          <div className="flex items-start gap-3">
+            <AlertCircle className={`w-4 h-4 mt-0.5 flex-shrink-0 ${fault.severity === "critical" ? "text-red-400" : fault.severity === "warning" ? "text-amber-400" : "text-blue-400"}`} />
+            <div>
+              <div className="text-sm font-semibold" style={{ color: "var(--card-value)" }}>
+                {fault.code} — {fault.name}
+              </div>
+              <div className="text-xs mt-1" style={{ color: "var(--card-sub)" }}>
+                <span className="font-medium">Cause:</span> {fault.cause}
+              </div>
+              <div className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                <span className="font-medium">Action:</span> {fault.action}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Shading alert */}
+      {shade?.detected && (
+        <div className="rounded-xl p-4 border-l-4 border-l-amber-500 bg-amber-500/5">
+          <div className="flex items-start gap-3">
+            <Eye className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-400" />
+            <div>
+              <div className="text-sm font-semibold text-amber-400">Possible string shading detected</div>
+              <div className="text-xs mt-0.5" style={{ color: "var(--card-sub)" }}>{shade.detail}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Metrics grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-0 divide-y lg:divide-y-0" style={{ borderColor: "var(--bg-border)" }}>
+        <div>
+          {/* DC→AC Efficiency */}
+          <InverterMetricRow
+            icon={Gauge}
+            iconColor={eff.context?.status === "excellent" ? "text-emerald-400" : eff.context?.status === "good" ? "text-emerald-300" : eff.context?.status === "low" || eff.context?.status === "poor" ? "text-amber-400" : "text-slate-400"}
+            label="DC→AC Efficiency"
+            value={eff.live_pct != null ? `${eff.live_pct}%` : "—"}
+            sub={eff.context?.detail ?? `Spec: ${eff.spec_peak}% peak`}
+            badge={eff.context?.status !== "no_data" ? { status: eff.context?.status ?? "no_data", label: eff.context?.status === "excellent" ? "Excellent" : eff.context?.status === "good" ? "Good" : eff.context?.status === "low" ? "Below normal" : eff.context?.status === "poor" ? "Very low" : "—" } : null}
+          />
+          {/* PV Voltage */}
+          <InverterMetricRow
+            icon={Zap}
+            iconColor={volt.status === "warning" ? "text-red-400" : volt.status === "caution" ? "text-amber-400" : "text-blue-400"}
+            label="PV String Voltage"
+            value={volt.voltage_v > 0 ? `${volt.voltage_v} V` : "—"}
+            sub={`${volt.pct_used ?? 0}% of 550V max · MPPT range: 70–550V`}
+            badge={volt.status !== "no_data" ? { status: volt.status, label: volt.status === "warning" ? "High voltage" : volt.status === "caution" ? "Elevated" : "Normal" } : null}
+          />
+          {/* PV Power */}
+          <InverterMetricRow
+            icon={Sun}
+            iconColor="text-amber-400"
+            label="PV DC Power"
+            value={raw.pv1_dc_w > 0 ? `${raw.pv1_dc_w} W` : "—"}
+            sub={`${raw.pv1_voltage_v?.toFixed(1) ?? "—"} V × ${raw.pv1_current_a?.toFixed(2) ?? "—"} A`}
+          />
+        </div>
+        <div>
+          {/* Thermal */}
+          <InverterMetricRow
+            icon={Thermometer}
+            iconColor={therm.status === "critical" ? "text-red-400" : therm.status === "warning" ? "text-red-300" : therm.status === "warm" ? "text-amber-400" : "text-emerald-400"}
+            label="Inverter Temperature"
+            value={therm.radiator_c > 0 ? `${therm.radiator_c}°C` : "—"}
+            sub={therm.detail ?? "Radiator / heatsink temp"}
+            badge={therm.status !== "no_data" ? { status: therm.status === "warm" ? "caution" : therm.status, label: therm.label?.split("—")[1]?.trim() ?? therm.status } : null}
+          />
+          {/* Ambient (inverter sensor) */}
+          <InverterMetricRow
+            icon={Activity}
+            iconColor="text-slate-400"
+            label="Ambient (inverter sensor)"
+            value={raw.internal_ambient_c > 0 ? `${raw.internal_ambient_c}°C` : "—"}
+            sub={therm.derating ? "Above 45°C — output may derate" : "Below 45°C — no derating"}
+            badge={therm.derating ? { status: "warning", label: "Derating" } : raw.internal_ambient_c > 0 ? { status: "normal", label: "OK" } : null}
+          />
+          {/* AC Output */}
+          <InverterMetricRow
+            icon={Zap}
+            iconColor="text-emerald-400"
+            label="AC Output"
+            value={raw.power_ac_w > 0 ? `${raw.power_ac_w >= 1000 ? `${(raw.power_ac_w / 1000).toFixed(2)} kW` : `${raw.power_ac_w} W`}` : isDay ? "—" : "Standby"}
+            sub={`Rated: ${(diag.rated_ac_w / 1000).toFixed(1)} kW · ${diag.num_mppt} MPPT · 1 string`}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -349,6 +510,7 @@ export default function Dashboard() {
   const [refreshing, setRefreshing]   = useState(false);
   const [livePower, setLivePower]     = useState<number | null>(null);
   const [nightFallback, setNightFallback] = useState(false);
+  const [inverterDiag, setInverterDiag]   = useState<any>(null);
   const liveTimerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
   const loadLivePower = useCallback(async () => {
@@ -364,13 +526,14 @@ export default function Dashboard() {
       const API = process.env.NEXT_PUBLIC_API_URL ?? "";
       const fromParam = chartRange === "custom" ? customFrom : undefined;
       const toParam   = chartRange === "custom" ? customTo   : undefined;
-      const [s, c, sc, an, cl, wx] = await Promise.all([
+      const [s, c, sc, an, cl, wx, inv] = await Promise.all([
         fetchDashboardSummary(),
         fetchDailyChart(chartRange, fromParam, toParam),
         fetchHealthScorecard(),
         fetch(`${API}/api/analysis?days=7`).then(r => r.ok ? r.json() : null).catch(() => null),
         fetch(`${API}/api/cleaning`).then(r => r.ok ? r.json() : null).catch(() => null),
         fetch(`${API}/api/weather`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`${API}/api/dashboard/inverter`).then(r => r.ok ? r.json() : null).catch(() => null),
       ]);
       setSummary(s);
       setLivePower(s.power_now_w ?? 0);
@@ -388,6 +551,7 @@ export default function Dashboard() {
       setAnalysis(an);
       setCleaning(cl);
       setWeather(wx);
+      setInverterDiag(inv);
       setLastRefresh(new Date());
     } catch (e) {
       console.error(e);
@@ -494,6 +658,9 @@ export default function Dashboard() {
           ))}
         </div>
       </div>
+
+      {/* Inverter Diagnostics */}
+      <InverterDiagnosticsPanel diag={inverterDiag} />
 
       {/* Action flashcards — only shown when there are quick wins */}
       <ActionCards />
