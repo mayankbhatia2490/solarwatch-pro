@@ -134,32 +134,6 @@ function HealthRow({ parameter, value, status }: any) {
   );
 }
 
-function PaybackBar({ recovered, total, pct }: any) {
-  const milestones = [25, 50, 75];
-  return (
-    <div>
-      <div className="flex justify-between text-sm mb-3">
-        <span className="font-medium" style={{ color: "var(--card-value)" }}>₹{recovered.toLocaleString("en-IN")} recovered</span>
-        <span style={{ color: "var(--card-sub)" }}>of ₹{total.toLocaleString("en-IN")}</span>
-      </div>
-      <div className="relative h-3 rounded-full overflow-hidden" style={{ background: "var(--bg-surface-2)" }}>
-        <div
-          className="h-full bg-gradient-to-r from-emerald-500 to-green-400 rounded-full transition-all duration-1000"
-          style={{ width: `${pct}%` }}
-        />
-        {milestones.map(m => (
-          <div key={m} className="absolute top-0 bottom-0 w-px" style={{ left: `${m}%`, background: "var(--bg-border)" }} />
-        ))}
-      </div>
-      <div className="flex justify-between mt-1.5 text-xs" style={{ color: "var(--card-sub)" }}>
-        {milestones.map(m => <span key={m}>{m}%</span>)}
-        <span>100%</span>
-      </div>
-      <div className="mt-2 text-xs" style={{ color: "var(--card-sub)" }}>{pct.toFixed(1)}% complete</div>
-    </div>
-  );
-}
-
 function ChartRangeBar({ range, setRange, from, to, setFrom, setTo }: any) {
   const [showPicker, setShowPicker] = useState(false);
   function applyCustom() {
@@ -523,47 +497,6 @@ export default function Dashboard() {
 
       {/* Action flashcards — only shown when there are quick wins */}
       <ActionCards />
-
-      {/* Environmental + Payback */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="glass-card rounded-2xl p-5 border border-emerald-500/15">
-          <div className="flex items-center gap-2 mb-4">
-            <Leaf className="w-4 h-4 text-emerald-500" />
-            <h2 className="font-semibold" style={{ color: "var(--card-title)" }}>Environmental Impact</h2>
-          </div>
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <div className="text-2xl font-bold number-gradient">{(summary?.co2_today_kg ?? 0).toFixed(1)} kg</div>
-              <div className="text-xs mt-1" style={{ color: "var(--card-sub)" }}>CO₂ today</div>
-            </div>
-            <div>
-              <div className="text-2xl font-bold number-gradient">{(summary?.co2_total_kg ?? 0).toFixed(0)} kg</div>
-              <div className="text-xs mt-1" style={{ color: "var(--card-sub)" }}>CO₂ total</div>
-            </div>
-            <div>
-              <div className="text-2xl font-bold number-gradient">{summary?.trees_equivalent ?? 0}</div>
-              <div className="text-xs mt-1" style={{ color: "var(--card-sub)" }}>trees equivalent</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="glass-card rounded-2xl p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <TrendingUp className="w-4 h-4 text-blue-500" />
-            <h2 className="font-semibold" style={{ color: "var(--card-title)" }}>Investment Payback</h2>
-          </div>
-          <PaybackBar
-            recovered={summary?.savings_total_inr ?? 0}
-            total={summary?.system_cost_inr ?? 190000}
-            pct={summary?.payback_pct ?? 0}
-          />
-          {summary?.years_to_payback > 0 && (
-            <div className="mt-3 text-xs" style={{ color: "var(--card-sub)" }}>
-              Estimated full payback in ~{summary.years_to_payback.toFixed(1)} years at current rate
-            </div>
-          )}
-        </div>
-      </div>
 
     </div>
   );
