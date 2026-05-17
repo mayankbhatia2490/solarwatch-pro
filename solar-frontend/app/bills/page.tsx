@@ -1,7 +1,10 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { Upload, FileText, CheckCircle, AlertCircle, Zap, IndianRupee, Calendar, RefreshCw, TrendingUp } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import {
+  Upload, FileText, CheckCircle, AlertCircle, Zap, IndianRupee,
+  Calendar, RefreshCw, TrendingUp, BarChart2, AlertTriangle, Info,
+} from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -21,14 +24,40 @@ interface ParsedBill {
   carry_forward_kwh:     number | null;
 }
 
-interface BillRecord {
-  time:                 string;
-  billing_period_from?: string;
-  billing_period_to?:   string;
-  units_consumed_kwh?:  number;
-  units_exported_kwh?:  number;
-  total_amount_inr?:    number;
-  consumer_number?:     string;
+interface BillAnomaly {
+  level:  "error" | "warning" | "info";
+  code:   string;
+  title:  string;
+  detail: string;
+  action: string | null;
+}
+
+interface BillInsight {
+  period_from:           string | null;
+  period_to:             string | null;
+  solar_kwh_bill:        number | null;
+  solar_kwh_app:         number | null;
+  meter_correction:      number | null;
+  over_read_pct:         number | null;
+  import_kwh:            number | null;
+  export_kwh:            number | null;
+  total_consumption_kwh: number | null;
+  self_consumption_pct:  number | null;
+  solar_offset_pct:      number | null;
+  amount_inr:            number | null;
+  carry_forward_kwh:     number | null;
+  anomalies:             BillAnomaly[];
+}
+
+interface InsightsSummary {
+  bill_count:                  number;
+  bills_with_meter_comparison: number;
+  avg_correction_factor:       number | null;
+  latest_correction_factor:    number | null;
+  avg_monthly_consumption_kwh: number | null;
+  avg_solar_offset_pct:        number | null;
+  avg_self_consumption_pct:    number | null;
+  current_correction_factor:   number;
 }
 
 function Field({ label, value, onChange, type = "text" }: {
@@ -38,9 +67,7 @@ function Field({ label, value, onChange, type = "text" }: {
     <div>
       <label className="block text-xs mb-1" style={{ color: "var(--card-label)" }}>{label}</label>
       <input
-        type={type}
-        value={value}
-        onChange={e => onChange(e.target.value)}
+        type={type} value={value} onChange={e => onChange(e.target.value)}
         className="w-full text-sm px-3 py-2 rounded-lg border outline-none focus:ring-1 focus:ring-emerald-500"
         style={{ background: "var(--bg-surface-2)", borderColor: "var(--bg-border)", color: "var(--card-value)" }}
       />
@@ -48,25 +75,53 @@ function Field({ label, value, onChange, type = "text" }: {
   );
 }
 
-export default function BillsPage() {
-  const [stage, setStage]       = useState<"idle"|"uploading"|"review"|"saving"|"done"|"error">("idle");
-  const [parsed, setParsed]     = useState<ParsedBill | null>(null);
-  const [filename, setFilename] = useState("");
-  const [errMsg, setErrMsg]     = useState("");
-  const [history, setHistory]   = useState<BillRecord[]>([]);
-  const [histLoading, setHistLoading] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+function MiniStat({ label, value, sub, color = "text-emerald-400" }: {
+  label: string; value: string; sub?: string; color?: string;
+}) {
+  return (
+    <div className="rounded-xl p-3" style={{ background: "var(--bg-surface-2)" }}>
+      <div className={`text-lg font-bold ${color}`}>{value}</div>
+      <div className="text-xs font-medium mt-0.5" style={{ color: "var(--card-label)" }}>{label}</div>
+      {sub && <div className="text-xs mt-0.5" style={{ color: "var(--card-sub)" }}>{sub}</div>}
+    </div>
+  );
+}
 
-  // Editable fields (all as strings for the form)
-  const [form, setForm] = useState<Record<string, string>>({});
+function periodLabel(from: string | null, to: string | null): string {
+  if (!from && !to) return "Unknown period";
+  const fmt = (d: string) => {
+    const [y, m] = d.split("-");
+    return `${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parseInt(m)-1]} ${y}`;
+  };
+  if (from && to) return `${fmt(from)} → ${fmt(to)}`;
+  return fmt(from ?? to ?? "");
+}
+
+export default function BillsPage() {
+  const [stage, setStage]     = useState<"idle"|"uploading"|"review"|"saving"|"done"|"error">("idle");
+  const [parsed, setParsed]   = useState<ParsedBill | null>(null);
+  const [filename, setFilename] = useState("");
+  const [errMsg, setErrMsg]   = useState("");
+  const [form, setForm]       = useState<Record<string, string>>({});
+  const [insights, setInsights] = useState<{ bills: BillInsight[]; summary: InsightsSummary | null } | null>(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   function toForm(p: ParsedBill): Record<string, string> {
     const f: Record<string, string> = {};
-    for (const [k, v] of Object.entries(p)) {
-      f[k] = v != null ? String(v) : "";
-    }
+    for (const [k, v] of Object.entries(p)) f[k] = v != null ? String(v) : "";
     return f;
   }
+
+  async function loadInsights() {
+    setInsightsLoading(true);
+    try {
+      const res = await fetch(`${API}/api/bills/insights`);
+      if (res.ok) setInsights(await res.json());
+    } finally { setInsightsLoading(false); }
+  }
+
+  useEffect(() => { loadInsights(); }, []);
 
   async function handleFile(file: File) {
     if (!file.name.toLowerCase().endsWith(".pdf")) {
@@ -77,11 +132,11 @@ export default function BillsPage() {
     fd.append("file", file);
     try {
       const res = await fetch(`${API}/api/bills/upload`, { method: "POST", body: fd });
-      if (res.status === 413) throw new Error("File too large — nginx limit exceeded (check server config)");
+      if (res.status === 413) throw new Error("File too large — check nginx client_max_body_size");
       const text = await res.text();
       let json: any;
       try { json = JSON.parse(text); }
-      catch { throw new Error(`Server error (${res.status}) — not JSON. Check API logs.`); }
+      catch { throw new Error(`Server error (${res.status}) — check API logs`); }
       if (!res.ok) throw new Error(json.detail ?? "Upload failed");
       setParsed(json.parsed);
       setFilename(json.filename);
@@ -94,12 +149,13 @@ export default function BillsPage() {
 
   async function handleConfirm() {
     setStage("saving");
-    // Convert form strings back to typed values
-    const out: Record<string, any> = {};
     const numFields = [
       "previous_reading_kwh","current_reading_kwh","units_consumed_kwh",
-      "units_exported_kwh","net_units_billed_kwh","amount_before_tax_inr","total_amount_inr"
+      "solar_generated_kwh","units_exported_kwh","net_units_billed_kwh",
+      "units_imported_kwh","amount_before_tax_inr","total_amount_inr",
+      "sanctioned_load_kw","carry_forward_kwh",
     ];
+    const out: Record<string, any> = {};
     for (const [k, v] of Object.entries(form)) {
       if (!v) { out[k] = null; continue; }
       out[k] = numFields.includes(k) ? parseFloat(v) : v;
@@ -113,39 +169,16 @@ export default function BillsPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail ?? "Save failed");
       setStage("done");
-      loadHistory();
+      loadInsights();
     } catch (e: any) {
       setErrMsg(e.message ?? "Save failed"); setStage("error");
     }
   }
 
-  async function loadHistory() {
-    setHistLoading(true);
-    try {
-      const res = await fetch(`${API}/api/bills/history`);
-      if (res.ok) { const j = await res.json(); setHistory(j.bills ?? []); }
-    } finally { setHistLoading(false); }
-  }
-
-  // Load history on first render
-  useState(() => { loadHistory(); });
-
   const fv = (k: string) => form[k] ?? "";
   const sf = (k: string) => (v: string) => setForm(f => ({ ...f, [k]: v }));
-
-  // DHBVN sizing formula: kW Required = avg monthly units / 120
-  const SYSTEM_KW = 3.57;
-  const billsWithConsumption = history.filter(b => b.units_consumed_kwh != null && b.units_consumed_kwh > 0);
-  const avgMonthlyKwh = billsWithConsumption.length > 0
-    ? billsWithConsumption.reduce((s, b) => s + (b.units_consumed_kwh ?? 0), 0) / billsWithConsumption.length
-    : null;
-  const requiredKw   = avgMonthlyKwh != null ? avgMonthlyKwh / 120 : null;
-  const suggestedMin = requiredKw != null ? requiredKw * 1.1 : null;
-  const suggestedMax = requiredKw != null ? requiredKw * 1.2 : null;
-  const sizingVerdict = requiredKw == null ? null
-    : SYSTEM_KW < (suggestedMin ?? 0)  ? "undersized"
-    : SYSTEM_KW > (suggestedMax ?? 0) * 1.1 ? "oversized"
-    : "good";
+  const s = insights?.summary;
+  const bills = insights?.bills ?? [];
 
   return (
     <div className="pt-16 lg:pt-0 space-y-6 max-w-4xl">
@@ -203,34 +236,29 @@ export default function BillsPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Consumer Number"        value={fv("consumer_number")}       onChange={sf("consumer_number")} />
-            <Field label="Solar Meter Number"     value={fv("meter_number")}          onChange={sf("meter_number")} />
-            <Field label="Billing From"           value={fv("billing_period_from")}   onChange={sf("billing_period_from")} type="date" />
-            <Field label="Billing To"             value={fv("billing_period_to")}     onChange={sf("billing_period_to")}   type="date" />
-            <Field label="Solar Generated — KWHS (kWh)" value={fv("solar_generated_kwh")} onChange={sf("solar_generated_kwh")} type="number" />
-            <Field label="Import from Grid — KWHI (kWh)" value={fv("units_imported_kwh")} onChange={sf("units_imported_kwh")}  type="number" />
-            <Field label="Export to Grid — KWHE (kWh)"   value={fv("units_exported_kwh")} onChange={sf("units_exported_kwh")}  type="number" />
-            <Field label="Net Units Billed (kWh)" value={fv("net_units_billed_kwh")}  onChange={sf("net_units_billed_kwh")} type="number" />
-            <Field label="Net Payable Amount (₹ — negative = credit)" value={fv("total_amount_inr")} onChange={sf("total_amount_inr")} type="number" />
-            <Field label="Carry Forward Units (kWh)" value={fv("carry_forward_kwh")} onChange={sf("carry_forward_kwh")} type="number" />
-            <Field label="Due Date"               value={fv("due_date")}              onChange={sf("due_date")}             type="date" />
-            <Field label="Tariff Category"        value={fv("tariff_category")}       onChange={sf("tariff_category")} />
+            <Field label="Consumer Number"                       value={fv("consumer_number")}       onChange={sf("consumer_number")} />
+            <Field label="Solar Meter Number"                    value={fv("meter_number")}          onChange={sf("meter_number")} />
+            <Field label="Billing From"                          value={fv("billing_period_from")}   onChange={sf("billing_period_from")} type="date" />
+            <Field label="Billing To"                            value={fv("billing_period_to")}     onChange={sf("billing_period_to")} type="date" />
+            <Field label="Solar Generated — KWHS (kWh)"          value={fv("solar_generated_kwh")}   onChange={sf("solar_generated_kwh")} type="number" />
+            <Field label="Import from Grid — KWHI (kWh)"         value={fv("units_imported_kwh")}    onChange={sf("units_imported_kwh")} type="number" />
+            <Field label="Export to Grid — KWHE (kWh)"           value={fv("units_exported_kwh")}    onChange={sf("units_exported_kwh")} type="number" />
+            <Field label="Net Units Billed (kWh)"                value={fv("net_units_billed_kwh")}  onChange={sf("net_units_billed_kwh")} type="number" />
+            <Field label="Net Payable (₹ — negative = credit)"   value={fv("total_amount_inr")}      onChange={sf("total_amount_inr")} type="number" />
+            <Field label="Carry Forward Units (kWh)"             value={fv("carry_forward_kwh")}     onChange={sf("carry_forward_kwh")} type="number" />
+            <Field label="Due Date"                              value={fv("due_date")}              onChange={sf("due_date")} type="date" />
+            <Field label="Tariff Category"                       value={fv("tariff_category")}       onChange={sf("tariff_category")} />
           </div>
 
           <div className="flex gap-3 pt-2">
-            <button
-              onClick={handleConfirm}
-              disabled={stage === "saving"}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold transition-colors disabled:opacity-50"
-            >
+            <button onClick={handleConfirm} disabled={stage === "saving"}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold transition-colors disabled:opacity-50">
               {stage === "saving" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
               {stage === "saving" ? "Saving…" : "Confirm & Save"}
             </button>
-            <button
-              onClick={() => { setStage("idle"); setParsed(null); setForm({}); }}
+            <button onClick={() => { setStage("idle"); setParsed(null); setForm({}); }}
               className="px-5 py-2.5 rounded-xl text-sm font-medium border transition-colors"
-              style={{ borderColor: "var(--bg-border)", color: "var(--card-label)" }}
-            >
+              style={{ borderColor: "var(--bg-border)", color: "var(--card-label)" }}>
               Cancel
             </button>
           </div>
@@ -243,166 +271,221 @@ export default function BillsPage() {
           <CheckCircle className="w-8 h-8 text-emerald-400 flex-shrink-0" />
           <div>
             <p className="font-semibold text-emerald-400">Bill saved successfully</p>
-            <p className="text-sm mt-0.5" style={{ color: "var(--card-sub)" }}>Data stored in InfluxDB and visible in history below.</p>
+            <p className="text-sm mt-0.5" style={{ color: "var(--card-sub)" }}>
+              Shinemonitor vs UHBVN meter comparison computed and correction factor updated.
+            </p>
           </div>
-          <button
-            onClick={() => { setStage("idle"); setParsed(null); setForm({}); }}
-            className="ml-auto px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm hover:bg-emerald-500/20 transition-colors"
-          >
+          <button onClick={() => { setStage("idle"); setParsed(null); setForm({}); }}
+            className="ml-auto px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm hover:bg-emerald-500/20 transition-colors">
             Upload Another
           </button>
         </div>
       )}
 
-      {/* ── System Sizing Analysis ── */}
-      {avgMonthlyKwh != null && (
-        <div className="glass-card rounded-2xl p-5 space-y-4">
+      {/* ── Bill Intelligence ── */}
+      {bills.length > 0 && s && (
+        <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-emerald-400" />
-            <h2 className="font-semibold" style={{ color: "var(--card-title)" }}>System Sizing Analysis</h2>
+            <BarChart2 className="w-4 h-4 text-emerald-400" />
+            <h2 className="font-semibold" style={{ color: "var(--card-title)" }}>Bill Intelligence</h2>
             <span className="text-xs ml-auto" style={{ color: "var(--card-sub)" }}>
-              Based on {billsWithConsumption.length} bill{billsWithConsumption.length !== 1 ? "s" : ""} · DHBVN formula
+              {s.bill_count} bill{s.bill_count !== 1 ? "s" : ""} analysed · grows smarter with each upload
             </span>
           </div>
 
-          {/* Numbers row */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { label: "Avg Monthly Use",   value: `${avgMonthlyKwh.toFixed(0)} kWh`,          sub: "from your bills",          color: "text-blue-400" },
-              { label: "Min Required",       value: `${requiredKw!.toFixed(2)} kW`,              sub: "monthly units ÷ 120",      color: "text-amber-400" },
-              { label: "Suggested Range",    value: `${suggestedMin!.toFixed(1)}–${suggestedMax!.toFixed(1)} kW`, sub: "+10% to +20% buffer", color: "text-purple-400" },
-              { label: "Your System",        value: `${SYSTEM_KW} kW`,                           sub: "installed capacity",       color: "text-emerald-400" },
-            ].map(({ label, value, sub, color }) => (
-              <div key={label} className="rounded-xl p-3" style={{ background: "var(--bg-surface-2)" }}>
-                <div className={`text-lg font-bold ${color}`}>{value}</div>
-                <div className="text-xs font-medium mt-0.5" style={{ color: "var(--card-label)" }}>{label}</div>
-                <div className="text-xs mt-0.5" style={{ color: "var(--card-sub)" }}>{sub}</div>
+          {/* ── Meter accuracy card ── */}
+          {s.bills_with_meter_comparison > 0 && (
+            <div className="glass-card rounded-2xl p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold" style={{ color: "var(--card-value)" }}>
+                  Shinemonitor vs UHBVN Meter Accuracy
+                </h3>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">
+                  {s.bills_with_meter_comparison} period{s.bills_with_meter_comparison !== 1 ? "s" : ""} measured
+                </span>
               </div>
-            ))}
-          </div>
 
-          {/* Visual bar */}
-          <div className="space-y-1.5">
-            <div className="text-xs" style={{ color: "var(--card-sub)" }}>
-              Scale: 0 – {(Math.max(SYSTEM_KW, suggestedMax ?? 0) * 1.3).toFixed(1)} kW
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <MiniStat
+                  label="Current Correction"
+                  value={`${(s.current_correction_factor * 100).toFixed(1)}%`}
+                  sub="applied to all readings"
+                  color="text-emerald-400"
+                />
+                <MiniStat
+                  label="App Over-reads By"
+                  value={s.latest_correction_factor
+                    ? `${((1 / s.latest_correction_factor - 1) * 100).toFixed(1)}%`
+                    : "—"}
+                  sub="vs UHBVN meter (latest)"
+                  color="text-amber-400"
+                />
+                <MiniStat
+                  label="Avg Solar Offset"
+                  value={s.avg_solar_offset_pct != null ? `${s.avg_solar_offset_pct.toFixed(0)}%` : "—"}
+                  sub="of consumption from solar"
+                  color="text-blue-400"
+                />
+                <MiniStat
+                  label="Avg Self-Consumed"
+                  value={s.avg_self_consumption_pct != null ? `${s.avg_self_consumption_pct.toFixed(0)}%` : "—"}
+                  sub="of solar used in-house"
+                  color="text-purple-400"
+                />
+              </div>
+
+              <div className="text-xs px-3 py-2 rounded-lg border border-blue-500/20 bg-blue-500/5 flex items-start gap-2" style={{ color: "var(--card-sub)" }}>
+                <Info className="w-3.5 h-3.5 text-blue-400 mt-0.5 flex-shrink-0" />
+                <span>
+                  Shinemonitor reads the inverter&apos;s internal counter which over-reports vs the UHBVN physical KWHS meter.
+                  The correction factor is automatically updated each time you add a bill.
+                  {s.bills_with_meter_comparison < 3 && " Add more bills for a more stable average."}
+                </span>
+              </div>
             </div>
-            {(() => {
-              const maxScale = Math.max(SYSTEM_KW, suggestedMax ?? 0) * 1.3;
-              const reqPct   = ((requiredKw  ?? 0) / maxScale * 100).toFixed(1);
-              const minPct   = ((suggestedMin ?? 0) / maxScale * 100).toFixed(1);
-              const maxPct   = ((suggestedMax ?? 0) / maxScale * 100).toFixed(1);
-              const sysPct   = (SYSTEM_KW / maxScale * 100).toFixed(1);
-              return (
-                <div className="relative h-8 rounded-lg overflow-hidden" style={{ background: "var(--bg-surface-2)" }}>
-                  {/* Suggested range band */}
-                  <div className="absolute top-0 bottom-0 bg-emerald-500/20 border-l border-r border-emerald-500/40"
-                    style={{ left: `${minPct}%`, width: `${(parseFloat(maxPct) - parseFloat(minPct)).toFixed(1)}%` }} />
-                  {/* Required kW marker */}
-                  <div className="absolute top-1 bottom-1 w-0.5 bg-amber-400" style={{ left: `${reqPct}%` }} />
-                  {/* Your system marker */}
-                  <div className="absolute top-0 bottom-0 w-1 rounded bg-emerald-400" style={{ left: `calc(${sysPct}% - 2px)` }} />
-                  {/* Labels */}
-                  <div className="absolute inset-0 flex items-center px-3 gap-4 text-xs pointer-events-none">
-                    <span className="text-amber-400 font-medium">▲ Required: {requiredKw!.toFixed(2)} kW</span>
-                    <span className="text-emerald-500/70 font-medium">▓ Suggested: {suggestedMin!.toFixed(1)}–{suggestedMax!.toFixed(1)} kW</span>
-                    <span className="text-emerald-400 font-medium">▌ Yours: {SYSTEM_KW} kW</span>
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
+          )}
 
-          {/* Verdict */}
-          <div className={`flex items-start gap-3 rounded-xl p-3 border ${
-            sizingVerdict === "good"       ? "border-emerald-500/25 bg-emerald-500/5"  :
-            sizingVerdict === "undersized" ? "border-amber-500/25 bg-amber-500/5"     :
-                                             "border-blue-500/25 bg-blue-500/5"
-          }`}>
-            <span className="text-xl leading-none">
-              {sizingVerdict === "good" ? "✅" : sizingVerdict === "undersized" ? "⚠️" : "ℹ️"}
-            </span>
-            <div>
-              <p className="text-sm font-semibold" style={{ color: "var(--card-value)" }}>
-                {sizingVerdict === "good"       && `Your ${SYSTEM_KW} kW system is well-matched to your consumption.`}
-                {sizingVerdict === "undersized" && `Your ${SYSTEM_KW} kW system may be undersized for your consumption.`}
-                {sizingVerdict === "oversized"  && `Your ${SYSTEM_KW} kW system has comfortable headroom above your needs.`}
-              </p>
-              <p className="text-xs mt-1" style={{ color: "var(--card-sub)" }}>
-                {sizingVerdict === "good"       && `Falls within the recommended ${suggestedMin!.toFixed(1)}–${suggestedMax!.toFixed(1)} kW range. You have a healthy buffer for future load growth.`}
-                {sizingVerdict === "undersized" && `Average consumption of ${avgMonthlyKwh.toFixed(0)} kWh/month needs at least ${requiredKw!.toFixed(1)} kW. Consider adding panels if roof space allows.`}
-                {sizingVerdict === "oversized"  && `Your system can comfortably cover your ${avgMonthlyKwh.toFixed(0)} kWh/month average and handle future load additions like an EV or AC.`}
-              </p>
+          {/* ── Per-bill breakdown ── */}
+          <div className="glass-card rounded-2xl p-5 space-y-4">
+            <h3 className="text-sm font-semibold" style={{ color: "var(--card-value)" }}>Per-Bill Analysis</h3>
+            <div className="space-y-4">
+              {[...bills].reverse().map((b, i) => {
+                const hasComparison = b.solar_kwh_app != null && b.solar_kwh_bill != null;
+                return (
+                  <div key={i} className="rounded-xl border p-4 space-y-3" style={{ borderColor: "var(--bg-border)", background: "var(--bg-surface-2)" }}>
+                    {/* Period header */}
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="text-sm font-medium" style={{ color: "var(--card-value)" }}>
+                          {periodLabel(b.period_from, b.period_to)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs">
+                        {b.amount_inr != null && (
+                          <span className={b.amount_inr < 0 ? "text-emerald-400" : "text-amber-400"}>
+                            ₹{b.amount_inr.toFixed(0)}{b.amount_inr < 0 ? " credit" : ""}
+                          </span>
+                        )}
+                        {b.carry_forward_kwh != null && b.carry_forward_kwh > 0 && (
+                          <span className="text-blue-400">{b.carry_forward_kwh.toFixed(0)} kWh c/f</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Energy flow row */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                      <div>
+                        <div className="text-amber-400 font-semibold">{b.solar_kwh_bill?.toFixed(0) ?? "—"} kWh</div>
+                        <div style={{ color: "var(--card-sub)" }}>Solar (KWHS meter)</div>
+                      </div>
+                      <div>
+                        <div className="text-blue-400 font-semibold">{b.import_kwh?.toFixed(0) ?? "—"} kWh</div>
+                        <div style={{ color: "var(--card-sub)" }}>Grid import (KWHI)</div>
+                      </div>
+                      <div>
+                        <div className="text-emerald-400 font-semibold">{b.export_kwh?.toFixed(0) ?? "—"} kWh</div>
+                        <div style={{ color: "var(--card-sub)" }}>Grid export (KWHE)</div>
+                      </div>
+                      <div>
+                        <div className="font-semibold" style={{ color: "var(--card-value)" }}>{b.total_consumption_kwh?.toFixed(0) ?? "—"} kWh</div>
+                        <div style={{ color: "var(--card-sub)" }}>Total household use</div>
+                      </div>
+                    </div>
+
+                    {/* Shinemonitor vs meter comparison */}
+                    {hasComparison ? (
+                      <div className="flex flex-wrap gap-4 text-xs pt-1 border-t" style={{ borderColor: "var(--bg-border)" }}>
+                        <div>
+                          <span style={{ color: "var(--card-sub)" }}>App (Shinemonitor): </span>
+                          <span className="font-medium" style={{ color: "var(--card-value)" }}>{b.solar_kwh_app?.toFixed(1)} kWh</span>
+                        </div>
+                        <div>
+                          <span style={{ color: "var(--card-sub)" }}>UHBVN meter: </span>
+                          <span className="font-medium" style={{ color: "var(--card-value)" }}>{b.solar_kwh_bill?.toFixed(1)} kWh</span>
+                        </div>
+                        <div>
+                          <span style={{ color: "var(--card-sub)" }}>Discrepancy: </span>
+                          <span className={`font-semibold ${(b.over_read_pct ?? 0) > 10 ? "text-amber-400" : "text-emerald-400"}`}>
+                            +{b.over_read_pct?.toFixed(1)}% app over-reads
+                          </span>
+                        </div>
+                        {b.meter_correction != null && (
+                          <div>
+                            <span style={{ color: "var(--card-sub)" }}>Factor: </span>
+                            <span className="font-medium text-blue-400">{b.meter_correction.toFixed(4)}</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-xs pt-1 border-t" style={{ borderColor: "var(--bg-border)", color: "var(--card-sub)" }}>
+                        Shinemonitor vs UHBVN comparison not available for this period
+                        {!b.solar_kwh_bill && " — solar kWh not recorded in bill"}
+                      </div>
+                    )}
+
+                    {/* Ratios */}
+                    {(b.self_consumption_pct != null || b.solar_offset_pct != null) && (
+                      <div className="flex gap-4 text-xs">
+                        {b.self_consumption_pct != null && (
+                          <div>
+                            <span style={{ color: "var(--card-sub)" }}>Self-consumed: </span>
+                            <span className="font-medium text-purple-400">{b.self_consumption_pct.toFixed(0)}% of solar</span>
+                          </div>
+                        )}
+                        {b.solar_offset_pct != null && (
+                          <div>
+                            <span style={{ color: "var(--card-sub)" }}>Solar offset: </span>
+                            <span className="font-medium text-blue-400">{b.solar_offset_pct.toFixed(0)}% of consumption</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Anomalies & billing flags */}
+                    {b.anomalies.length > 0 && (
+                      <div className="space-y-2 pt-1 border-t" style={{ borderColor: "var(--bg-border)" }}>
+                        {b.anomalies.map((a, j) => {
+                          const isError   = a.level === "error";
+                          const isWarning = a.level === "warning";
+                          const borderCls = isError ? "border-red-500/30 bg-red-500/5" : isWarning ? "border-amber-500/30 bg-amber-500/5" : "border-blue-500/20 bg-blue-500/5";
+                          const iconCls   = isError ? "text-red-400" : isWarning ? "text-amber-400" : "text-blue-400";
+                          const Icon      = isError ? AlertCircle : isWarning ? AlertTriangle : Info;
+                          return (
+                            <div key={j} className={`rounded-lg border p-3 space-y-1 ${borderCls}`}>
+                              <div className={`flex items-start gap-2 text-xs font-semibold ${iconCls}`}>
+                                <Icon className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                                {a.title}
+                              </div>
+                              <p className="text-xs pl-5" style={{ color: "var(--card-sub)" }}>{a.detail}</p>
+                              {a.action && (
+                                <p className={`text-xs pl-5 font-medium ${iconCls}`}>→ {a.action}</p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
       )}
 
-      {/* ── History ── */}
-      <div className="glass-card rounded-2xl p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold" style={{ color: "var(--card-title)" }}>Bill History</h2>
-          <button onClick={loadHistory} className="p-1.5 rounded-lg hover:bg-slate-700/50 transition-colors">
-            <RefreshCw className={`w-3.5 h-3.5 text-slate-400 ${histLoading ? "animate-spin" : ""}`} />
-          </button>
-        </div>
-
-        {history.length === 0 ? (
-          <p className="text-sm text-center py-8" style={{ color: "var(--card-sub)" }}>
-            No bills stored yet — upload your first UHBVN bill above.
+      {/* ── Empty state when no bills yet ── */}
+      {bills.length === 0 && !insightsLoading && stage === "idle" && (
+        <div className="glass-card rounded-2xl p-8 text-center space-y-2">
+          <TrendingUp className="w-8 h-8 text-slate-500 mx-auto" />
+          <p className="text-sm font-medium" style={{ color: "var(--card-value)" }}>No bills stored yet</p>
+          <p className="text-xs" style={{ color: "var(--card-sub)" }}>
+            Upload your first UHBVN bill above. Each bill teaches the app your actual consumption pattern
+            and calibrates the Shinemonitor vs UHBVN meter discrepancy.
           </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr>
-                  {["Period", "Solar Gen (kWh)", "Import (kWh)", "Export (kWh)", "Amount (₹)"].map(h => (
-                    <th key={h} className="text-left pb-3 pr-4 text-xs font-medium" style={{ color: "var(--card-label)" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {history.map((b, i) => (
-                  <tr key={i} className="border-t" style={{ borderColor: "var(--bg-border)" }}>
-                    <td className="py-3 pr-4" style={{ color: "var(--card-value)" }}>
-                      <div className="flex items-center gap-1.5">
-                        <Calendar className="w-3 h-3 text-slate-500" />
-                        {b.billing_period_from && b.billing_period_to
-                          ? `${b.billing_period_from} → ${b.billing_period_to}`
-                          : new Date(b.time).toLocaleDateString("en-IN")}
-                      </div>
-                    </td>
-                    <td className="py-3 pr-4">
-                      <div className="flex items-center gap-1 text-amber-400">
-                        <Zap className="w-3 h-3" />
-                        {(b as any).solar_generated_kwh != null ? (b as any).solar_generated_kwh.toFixed(0) : "—"}
-                      </div>
-                    </td>
-                    <td className="py-3 pr-4">
-                      <div className="flex items-center gap-1 text-blue-400">
-                        <Zap className="w-3 h-3" />
-                        {(b as any).units_imported_kwh != null ? (b as any).units_imported_kwh.toFixed(0) : "—"}
-                      </div>
-                    </td>
-                    <td className="py-3 pr-4">
-                      <div className="flex items-center gap-1 text-emerald-400">
-                        <Zap className="w-3 h-3" />
-                        {b.units_exported_kwh != null ? b.units_exported_kwh.toFixed(0) : "—"}
-                      </div>
-                    </td>
-                    <td className="py-3">
-                      <div className={`flex items-center gap-1 ${(b.total_amount_inr ?? 0) < 0 ? "text-emerald-400" : "text-amber-400"}`}>
-                        <IndianRupee className="w-3 h-3" />
-                        {b.total_amount_inr != null ? b.total_amount_inr.toFixed(0) : "—"}
-                        {(b.total_amount_inr ?? 0) < 0 && <span className="text-xs">(credit)</span>}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
+
     </div>
   );
 }
